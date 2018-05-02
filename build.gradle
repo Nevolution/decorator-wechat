@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 26
+}
+
+dependencies {
+    debugImplementation project(':sdk')
+    releaseImplementation 'com.oasisfeng.nevo:sdk:1.0.0'
+
+    implementation 'com.android.support:support-compat:26.1.0'
+}
