@@ -84,8 +84,9 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	private static final String ACTION_REPLY = "REPLY";
 	private static final String SCHEME_KEY = "key";
-	private static final String EXTRA_PENDING_INTENT = "pending_intent";
+	private static final String EXTRA_REPLY_ACTION = "pending_intent";
 	private static final String EXTRA_RESULT_KEY = "result_key";
+	private static final String EXTRA_MARK_READ_ACTION = "mark_read";
 
 	private static final @ColorInt int PRIMARY_COLOR = 0xFF33B332;
 	private static final String SENDER_MESSAGE_SEPARATOR = ": ";
@@ -199,7 +200,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 				final RemoteInput remote_input = conversation.getParcelable(KEY_REMOTE_INPUT);
 				if (remote_input != null) {
 					final CharSequence[] input_history = SDK_INT >= N ? extras.getCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY) : null;
-					final PendingIntent proxy = proxyDirectReply(key, on_reply, remote_input, input_history);
+					final PendingIntent proxy = proxyDirectReply(key, on_reply, remote_input, input_history, on_read);
 					final RemoteInput.Builder tweaked = new RemoteInput.Builder(remote_input.getResultKey()).addExtras(remote_input.getExtras())
 							.setAllowFreeFormInput(remote_input.getAllowFreeFormInput());
 					final String[] participants = conversation.getStringArray(KEY_PARTICIPANTS);
@@ -231,25 +232,26 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	/** Intercept the PendingIntent in RemoteInput to update the notification with replied message upon success. */
 	private PendingIntent proxyDirectReply(final String key, final PendingIntent on_reply, final RemoteInput remote_input,
-										   final @Nullable CharSequence[] input_history) {
+										   final @Nullable CharSequence[] input_history, final PendingIntent on_read) {
 		final Intent proxy_intent = new Intent(ACTION_REPLY).setData(Uri.fromParts(SCHEME_KEY, key, null)).setPackage(getPackageName())
-				.putExtra(EXTRA_PENDING_INTENT, on_reply).putExtra(EXTRA_RESULT_KEY, remote_input.getResultKey());
+				.putExtra(EXTRA_REPLY_ACTION, on_reply).putExtra(EXTRA_RESULT_KEY, remote_input.getResultKey()).putExtra(EXTRA_MARK_READ_ACTION, on_read);
 		if (SDK_INT >= N && input_history != null)
 			proxy_intent.putCharSequenceArrayListExtra(Notification.EXTRA_REMOTE_INPUT_HISTORY, new ArrayList<>(Arrays.asList(input_history)));
 		return PendingIntent.getBroadcast(this, 0, proxy_intent, FLAG_UPDATE_CURRENT);
 	}
 
 	private final BroadcastReceiver mReplyReceiver = new BroadcastReceiver() { @RequiresApi(KITKAT_WATCH) @Override public void onReceive(final Context context, final Intent proxy_intent) {
-		final PendingIntent pending_intent = proxy_intent.getParcelableExtra(EXTRA_PENDING_INTENT);
+		final PendingIntent reply_action = proxy_intent.getParcelableExtra(EXTRA_REPLY_ACTION);
 		final String result_key = proxy_intent.getStringExtra(EXTRA_RESULT_KEY);
+		final PendingIntent mark_read_action = proxy_intent.getParcelableExtra(EXTRA_MARK_READ_ACTION);
 		final Uri data = proxy_intent.getData();
 		if (data == null) return;
 		final String key = data.getSchemeSpecificPart();
 		final ArrayList<CharSequence> input_history = SDK_INT >= N ? proxy_intent.getCharSequenceArrayListExtra(Notification.EXTRA_REMOTE_INPUT_HISTORY) : null;
 		try {
-			final Intent input_data = new Intent().setPackage(pending_intent.getCreatorPackage());	// Ensure it works even if WeChat is background-restricted.
+			final Intent input_data = new Intent().setPackage(reply_action.getCreatorPackage());	// Ensure it works even if WeChat is background-restricted.
 			input_data.setClipData(proxy_intent.getClipData());
-			pending_intent.send(WeChatDecorator.this, 0, input_data, new PendingIntent.OnFinished() { @Override public void onSendFinished(final PendingIntent pendingIntent, final Intent intent, final int resultCode, final String resultData, final Bundle resultExtras) {
+			reply_action.send(WeChatDecorator.this, 0, input_data, new PendingIntent.OnFinished() { @Override public void onSendFinished(final PendingIntent pendingIntent, final Intent intent, final int resultCode, final String resultData, final Bundle resultExtras) {
 				final Bundle input = RemoteInput.getResultsFromIntent(input_data);
 				if (input == null) return;
 				final CharSequence text = input.getCharSequence(result_key);
@@ -260,10 +262,15 @@ public class WeChatDecorator extends NevoDecoratorService {
 							: input_history.toArray(new CharSequence[input_history.add(text) ? input_history.size() : 0]);
 					addition.putCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY, inputs);
 					recastNotification(key, addition);
+					try {
+						mark_read_action.send(WeChatDecorator.this, 0, new Intent().setPackage(mark_read_action.getCreatorPackage()));
+					} catch (final PendingIntent.CanceledException e) {
+						Log.w(TAG, "Mark-read action is already canceled: " + intent.getStringExtra(KEY_CONVERSATION_ID));
+					}
 				}
 			}}, null);
 		} catch (final PendingIntent.CanceledException e) {
-			Log.w(TAG, "The PendingIntent for reply is already cancelled.");
+			Log.w(TAG, "Reply action is already cancelled: " + key);
 			abortBroadcast();
 		}
 	}};
