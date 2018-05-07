@@ -94,10 +94,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 	@Override public void apply(final MutableStatusBarNotification evolving) {
 		final MutableNotification n = evolving.getNotification();
 		final Bundle extras = n.extras;
-		if (extras.containsKey(Notification.EXTRA_REMOTE_INPUT_HISTORY)) {	// The updated notification with remote input history, re-casted by us.
-			n.flags |= Notification.FLAG_ONLY_ALERT_ONCE;					// This update should not alert
-			return;															// All tweaks were already done in this notification.
-		}
 
 		final CharSequence title = extras.getCharSequence(Notification.EXTRA_TITLE);
 		if (title == null || title.length() == 0) {
@@ -130,7 +126,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 		// Add additional replies filled by us in the proxied procedure of direct-reply.
 		if (SDK_INT >= N) {
 			final CharSequence[] inputs = extras.getCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY);
-			if (inputs != null) for (final CharSequence input : inputs) messaging.addMessage(input, 0, null);
+			if (inputs != null) for (final CharSequence input : inputs)
+				messaging.addMessage(new Message(input, System.currentTimeMillis(), null));
 		}
 
 		final Bundle addition = new Bundle();
