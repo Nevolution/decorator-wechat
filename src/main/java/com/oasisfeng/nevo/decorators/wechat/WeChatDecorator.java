@@ -245,7 +245,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final String result_key = proxy_intent.getStringExtra(EXTRA_RESULT_KEY);
 		final PendingIntent mark_read_action = proxy_intent.getParcelableExtra(EXTRA_MARK_READ_ACTION);
 		final Uri data = proxy_intent.getData();
-		if (data == null) return;
+		if (data == null || reply_action == null || result_key == null) return;		// Should never happen
 		final String key = data.getSchemeSpecificPart();
 		final ArrayList<CharSequence> input_history = SDK_INT >= N ? proxy_intent.getCharSequenceArrayListExtra(Notification.EXTRA_REMOTE_INPUT_HISTORY) : null;
 		try {
@@ -262,7 +262,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 							: input_history.toArray(new CharSequence[input_history.add(text) ? input_history.size() : 0]);
 					addition.putCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY, inputs);
 					recastNotification(key, addition);
-					try {
+					if (mark_read_action != null) try {
 						mark_read_action.send(WeChatDecorator.this, 0, new Intent().setPackage(mark_read_action.getCreatorPackage()));
 					} catch (final PendingIntent.CanceledException e) {
 						Log.w(TAG, "Mark-read action is already canceled: " + intent.getStringExtra(KEY_CONVERSATION_ID));
