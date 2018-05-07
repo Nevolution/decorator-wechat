@@ -203,20 +203,18 @@ public class WeChatDecorator extends NevoDecoratorService {
 				if (remote_input != null) {
 					final CharSequence[] input_history = SDK_INT >= N ? extras.getCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY) : null;
 					final PendingIntent proxy = proxyDirectReply(key, on_reply, remote_input, input_history);
-					if (proxy != null) {
-						final RemoteInput.Builder tweaked = new RemoteInput.Builder(remote_input.getResultKey()).addExtras(remote_input.getExtras())
-								.setAllowFreeFormInput(remote_input.getAllowFreeFormInput());
-						final String[] participants = conversation.getStringArray(KEY_PARTICIPANTS);
-						if (participants != null && participants.length > 0) {
-							final StringBuilder label = new StringBuilder();
-							for (final String participant : participants) label.append(',').append(participant);
-							tweaked.setLabel(label.subSequence(1, label.length()));
-						} else tweaked.setLabel(remote_input.getResultKey());
+					final RemoteInput.Builder tweaked = new RemoteInput.Builder(remote_input.getResultKey()).addExtras(remote_input.getExtras())
+							.setAllowFreeFormInput(remote_input.getAllowFreeFormInput());
+					final String[] participants = conversation.getStringArray(KEY_PARTICIPANTS);
+					if (participants != null && participants.length > 0) {
+						final StringBuilder label = new StringBuilder();
+						for (final String participant : participants) label.append(',').append(participant);
+						tweaked.setLabel(label.subSequence(1, label.length()));
+					} else tweaked.setLabel(remote_input.getResultKey());
 
-						final Action.Builder builder = new Action.Builder(null, getString(R.string.action_reply), proxy).addRemoteInput(tweaked.build());
-						if (SDK_INT >= N) builder.setAllowGeneratedReplies(true);		// Enable "Smart Reply"
-						n.addAction(builder.build());
-					}
+					final Action.Builder builder = new Action.Builder(null, getString(R.string.action_reply), proxy).addRemoteInput(tweaked.build());
+					if (SDK_INT >= N) builder.setAllowGeneratedReplies(true);		// Enable "Smart Reply"
+					n.addAction(builder.build());
 				}
 			}
 		}
@@ -235,8 +233,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 	}
 
 	/** Intercept the PendingIntent in RemoteInput to update the notification with replied message upon success. */
-	@RequiresApi(KITKAT_WATCH) private @Nullable PendingIntent proxyDirectReply(
-			final String key, final PendingIntent on_reply, final RemoteInput remote_input, final @Nullable CharSequence[] input_history) {
+	private PendingIntent proxyDirectReply(final String key, final PendingIntent on_reply, final RemoteInput remote_input,
+										   final @Nullable CharSequence[] input_history) {
 		final Intent proxy_intent = new Intent(ACTION_REPLY).setData(Uri.fromParts(SCHEME_KEY, key, null)).setPackage(getPackageName())
 				.putExtra(EXTRA_PENDING_INTENT, on_reply).putExtra(EXTRA_RESULT_KEY, remote_input.getResultKey());
 		if (SDK_INT >= N && input_history != null)
@@ -252,7 +250,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final String key = data.getSchemeSpecificPart();
 		final ArrayList<CharSequence> input_history = SDK_INT >= N ? proxy_intent.getCharSequenceArrayListExtra(Notification.EXTRA_REMOTE_INPUT_HISTORY) : null;
 		try {
-			final Intent input_data = new Intent();
+			final Intent input_data = new Intent().setPackage(pending_intent.getCreatorPackage());	// Ensure it works even if WeChat is background-restricted.
 			input_data.setClipData(proxy_intent.getClipData());
 			pending_intent.send(WeChatDecorator.this, 0, input_data, new PendingIntent.OnFinished() { @Override public void onSendFinished(final PendingIntent pendingIntent, final Intent intent, final int resultCode, final String resultData, final Bundle resultExtras) {
 				final Bundle input = RemoteInput.getResultsFromIntent(input_data);
