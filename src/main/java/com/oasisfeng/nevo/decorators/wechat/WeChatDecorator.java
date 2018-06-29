@@ -127,8 +127,11 @@ public class WeChatDecorator extends NevoDecoratorService {
 		// Add additional replies filled by us in the proxied procedure of direct-reply.
 		if (SDK_INT >= N) {
 			final CharSequence[] inputs = extras.getCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY);
-			if (inputs != null) for (final CharSequence input : inputs)
-				messaging.addMessage(new Message(input, System.currentTimeMillis(), null));
+			if (inputs != null) {
+				n.flags |= Notification.FLAG_ONLY_ALERT_ONCE;
+				for (final CharSequence input : inputs)
+					messaging.addMessage(new Message(input, System.currentTimeMillis(), null));
+			}
 		}
 
 		final Bundle addition = new Bundle();
