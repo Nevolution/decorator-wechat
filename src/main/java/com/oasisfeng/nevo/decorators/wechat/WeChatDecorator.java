@@ -257,8 +257,11 @@ public class WeChatDecorator extends NevoDecoratorService {
 				if (BuildConfig.DEBUG) Log.d(TAG, "Reply sent: " + intent.toUri(0));
 				if (SDK_INT >= N) {
 					final Bundle addition = new Bundle();
-					final CharSequence[] inputs = input_history == null ? new CharSequence[] { text }
-							: input_history.toArray(new CharSequence[input_history.add(text) ? input_history.size() : 0]);
+					final CharSequence[] inputs;
+					if (input_history != null) {
+						input_history.add(0, text);
+						inputs = input_history.toArray(new CharSequence[0]);
+					} else inputs = new CharSequence[] { text };
 					addition.putCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY, inputs);
 					recastNotification(key, addition);
 					if (mark_read_action != null) try {
