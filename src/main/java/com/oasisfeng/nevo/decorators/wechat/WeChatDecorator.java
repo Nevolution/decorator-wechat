@@ -31,6 +31,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.service.notification.StatusBarNotification;
+import android.text.TextUtils;
 import android.util.Log;
 import android.util.LongSparseArray;
 
@@ -81,7 +82,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private static final String KEY_PARTICIPANTS = "participants";
 	private static final String KEY_TIMESTAMP = "timestamp";
 
-	//private static final String KEY_TIMESTAMP = "timestamp";
 	private static final String KEY_CONVERSATION_ID = "key_username";	// The internal conversation ID in WeChat.
 
 	private static final String ACTION_REPLY = "REPLY";
@@ -169,9 +169,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 			Log.w(TAG, EXTRA_CONVERSATION + " is missing");
 			return null;
 		}
-		final long latest_timestamp = conversation.getLong(KEY_TIMESTAMP, 0);
-		if (latest_timestamp != 0) n.when = latest_timestamp;
-
 		final Parcelable[] parcelable_messages = conversation.getParcelableArray(KEY_MESSAGES);
 		if (parcelable_messages == null) {
 			Log.w(TAG, KEY_MESSAGES + " is missing");
@@ -179,17 +176,16 @@ public class WeChatDecorator extends NevoDecoratorService {
 		}
 		final MessagingStyle messaging = new MessagingStyle(mSelf);
 		if (parcelable_messages.length == 0) {		// When only one message in this conversation
-			messaging.addMessage(buildMessage(title, extras.getCharSequence(Notification.EXTRA_TEXT), null, group_chat));
-		} else for (final Parcelable parcelable_message : parcelable_messages) {
+			messaging.addMessage(buildMessage(n.when, title, n.tickerText, extras.getCharSequence(Notification.EXTRA_TEXT), null, group_chat));
+		} else for (int i = 0, length = parcelable_messages.length; i < length; i++) {
+			final Parcelable parcelable_message = parcelable_messages[i];
 			if (! (parcelable_message instanceof Bundle)) return null;
 			final Bundle message = (Bundle) parcelable_message;
 			final String text = message.getString(KEY_TEXT);
-			if (text == null) {
-				Log.w(TAG, KEY_TEXT + " is missing");
-				return null;
-			}
-			final CharSequence sender = message.getString(KEY_AUTHOR);	// Apparently always null (not yet implemented by WeChat at present)
-			messaging.addMessage(buildMessage(title, text, sender, group_chat));
+			if (text == null) continue;
+			final long timestamp = message.getLong(KEY_TIMESTAMP);
+			final CharSequence author = message.getString(KEY_AUTHOR);    // Apparently always null (not yet implemented by WeChat)
+			messaging.addMessage(buildMessage(timestamp, title, i == length -1 ? n.tickerText : null, text, author, group_chat));
 		}
 
 		final PendingIntent on_read = conversation.getParcelable(KEY_ON_READ);
@@ -217,16 +213,21 @@ public class WeChatDecorator extends NevoDecoratorService {
 		return messaging;
 	}
 
-	private static Message buildMessage(final CharSequence title, final CharSequence text, final @Nullable CharSequence sender, final boolean group_chat) {
-		final int pos_colon;
+	private static Message buildMessage(final long when, final CharSequence title, @Nullable final CharSequence ticker, final CharSequence text,
+										@Nullable CharSequence sender, final boolean group_chat) {
 		CharSequence display_text = text;
-		final CharSequence display_sender;
-		if (sender == null && (pos_colon = text.toString().indexOf(SENDER_MESSAGE_SEPARATOR)) > 0) {
-			display_sender = text.subSequence(0, pos_colon);
-			display_text = text.subSequence(pos_colon + 2, text.length());
-		} else display_sender = title;
-		final Person person = group_chat ? new Person.Builder().setName(display_sender).build() : SENDER_PLACEHOLDER;
-		return new Message(display_text, 0/* TODO: Any effect in Android Auto? */, person);
+		if (ticker != null && (text == null || ticker.length() > text.length())) display_text = ticker;	// Prefer ticker text if longer than text
+		if (sender == null) {
+			final int pos_colon = display_text.toString().indexOf(SENDER_MESSAGE_SEPARATOR);
+			if (pos_colon > 0) {
+				sender = display_text.subSequence(0, pos_colon);
+				display_text = display_text.subSequence(pos_colon + 2, display_text.length());
+				if (TextUtils.equals(title, sender)) sender = null;		// In this case, the actual sender is user itself.
+			} else sender = title;
+		}
+
+		final Person person = group_chat ? (sender != null ? new Person.Builder().setName(sender).build() : null) : SENDER_PLACEHOLDER;
+		return new Message(display_text, when, person);
 	}
 
 	/** Intercept the PendingIntent in RemoteInput to update the notification with replied message upon success. */
@@ -327,24 +328,13 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 		final MessagingStyle messaging = new MessagingStyle(mSelf);
 		final boolean sender_inline = num_lines_with_colon == lines.size();
-		for (int i = 0; i < lines.size(); i++) {    // All lines have colon in text
-			final long when = lines.keyAt(i);
-			final CharSequence line = lines.valueAt(i);
-			final int pos_colon;
-			if (sender_inline && (pos_colon = line.toString().indexOf(SENDER_MESSAGE_SEPARATOR)) > 0) {
-				final Person person = group_chat ? new Person.Builder().setName(line.subSequence(0, pos_colon)).build() : SENDER_PLACEHOLDER;
-				messaging.addMessage(line.subSequence(pos_colon + 2, line.length()), when, person);
-			} else {
-				final Person person = group_chat ? new Person.Builder().setName(title).build() : SENDER_PLACEHOLDER;
-				messaging.addMessage(line, when, person);
-			}
-		}
+		for (int i = 0, size = lines.size(); i < size; i++)		// All lines have colon in text
+			messaging.addMessage(buildMessage(lines.keyAt(i), title, i == size - 1 ? n.tickerText : null, lines.valueAt(i),
+					sender_inline ? null : title, group_chat));
 		return messaging;
 	}
 
-	/**
-	 * @return the extracted count in 0xFF range and start position in 0xFF00 range
-	 */
+	/** @return the extracted count in 0xFF range and start position in 0xFF00 range */
 	private static int trimAndExtractLeadingCounter(final CharSequence text) {
 		// Parse and remove the leading "[n]" or [n条/則/…]
 		if (text == null || text.length() < 4 || text.charAt(0) != '[') return - 1;
