@@ -26,6 +26,8 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Bundle;
@@ -39,6 +41,7 @@ import com.oasisfeng.nevo.sdk.MutableNotification;
 import com.oasisfeng.nevo.sdk.MutableStatusBarNotification;
 import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -52,13 +55,16 @@ import androidx.core.app.NotificationCompat.MessagingStyle;
 import androidx.core.app.NotificationCompat.MessagingStyle.Message;
 import androidx.core.app.Person;
 
+import static android.Manifest.permission.READ_EXTERNAL_STORAGE;
 import static android.app.PendingIntent.FLAG_UPDATE_CURRENT;
+import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION;
 import static android.media.AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT;
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.KITKAT_WATCH;
 import static android.os.Build.VERSION_CODES.N;
 import static android.os.Build.VERSION_CODES.O;
+import static android.os.Build.VERSION_CODES.O_MR1;
 
 /**
  * Bring state-of-art notification experience to WeChat.
@@ -67,22 +73,26 @@ import static android.os.Build.VERSION_CODES.O;
  */
 public class WeChatDecorator extends NevoDecoratorService {
 
-	private static final long GROUP_CHAT_SORT_KEY_SHIFT = 24 * 60 * 60 * 1000L;		// Sort group chat as one day older message.
+	private static final long GROUP_CHAT_SORT_KEY_SHIFT = 24 * 60 * 60 * 1000L;        // Sort group chat as one day older message.
 	private static final int MAX_NUM_LINES = 10;
 	private static final int NID_CONVERSATION_START = 4096;
+	private static final String CHANNEL_MESSAGE = "message";
+	private static final String CHANNEL_GROUP_CONVERSATION = "group";
+	private static final String CHANNEL_MISC = "misc";
+
 	private static final String EXTRA_CAR_EXTENDER = "android.car.EXTENSIONS";
 	private static final String EXTRA_CONVERSATION = "car_conversation";
 	/* Following keys are originally defined in Notification.CarExtender.UnreadConversation */
 	private static final String KEY_MESSAGES = "messages";
-	private static final String KEY_AUTHOR = "author";		// In the bundle of KEY_MESSAGES
-	private static final String KEY_TEXT = "text";			// In the bundle of KEY_MESSAGES
+	private static final String KEY_AUTHOR = "author";        // In the bundle of KEY_MESSAGES
+	private static final String KEY_TEXT = "text";            // In the bundle of KEY_MESSAGES
 	private static final String KEY_REMOTE_INPUT = "remote_input";
 	private static final String KEY_ON_REPLY = "on_reply";
 	private static final String KEY_ON_READ = "on_read";
 	private static final String KEY_PARTICIPANTS = "participants";
 	private static final String KEY_TIMESTAMP = "timestamp";
 
-	private static final String KEY_CONVERSATION_ID = "key_username";	// The internal conversation ID in WeChat.
+	private static final String KEY_CONVERSATION_ID = "key_username";    // The internal conversation ID in WeChat.
 
 	private static final String ACTION_REPLY = "REPLY";
 	private static final String SCHEME_KEY = "key";
@@ -92,7 +102,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	private static final @ColorInt int PRIMARY_COLOR = 0xFF33B332;
 	private static final String SENDER_MESSAGE_SEPARATOR = ": ";
-	private static final Person SENDER_PLACEHOLDER = new Person.Builder().setName(" ").build();	// Cannot be empty string, or it will be treated as null.
+	private static final Person SENDER_PLACEHOLDER = new Person.Builder().setName(" ").build();    // Cannot be empty string, or it will be treated as null.
 
 	@Override public void apply(final MutableStatusBarNotification evolving) {
 		final MutableNotification n = evolving.getNotification();
@@ -106,43 +116,66 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final int original_id = evolving.getOriginalId();
 		if (BuildConfig.DEBUG) extras.putString("nevo.debug", "ID:" + original_id + ",t:" + n.tickerText);
 
-		n.color = PRIMARY_COLOR;		// Tint the small icon
+		n.color = PRIMARY_COLOR;        // Tint the small icon
 
 		// WeChat uses dynamic counter as notification ID, which unfortunately will be reset upon evolving (removal, to be exact) by us,
 		// causing all messages combined into one notification. So we split them by re-coding the notification ID by title.
 		if (original_id < NID_CONVERSATION_START) {
 			if (SDK_INT >= O) n.setChannelId(CHANNEL_MISC);
-			Log.d(TAG, "Skip further process for non-conversation notification. ID: " + original_id);	// E.g. web login confirmation notification.
+			Log.d(TAG, "Skip further process for non-conversation notification. ID: " + original_id);    // E.g. web login confirmation notification.
 			return;
 		}
+
 		evolving.setId(title.hashCode());
 		extras.putBoolean(Notification.EXTRA_SHOW_WHEN, true);
+		if (BuildConfig.DEBUG) n.flags &= ~ Notification.FLAG_LOCAL_ONLY;
 
 		final CharSequence content_text = extras.getCharSequence(Notification.EXTRA_TEXT);
 		final boolean group_chat = isGroupChat(n.tickerText, title.toString(), content_text);
-		n.setSortKey(String.valueOf(Long.MAX_VALUE - n.when + (group_chat ? GROUP_CHAT_SORT_KEY_SHIFT : 0)));	// Place group chat below other messages
+		n.setSortKey(String.valueOf(Long.MAX_VALUE - n.when + (group_chat ? GROUP_CHAT_SORT_KEY_SHIFT : 0)));    // Place group chat below other messages
 		if (SDK_INT >= O) n.setChannelId(group_chat ? CHANNEL_GROUP_CONVERSATION : CHANNEL_MESSAGE);
+
 		MessagingStyle messaging = buildFromCarExtender(evolving.getKey(), n, title, extras, group_chat);
 		if (messaging == null) messaging = buildFromArchive(evolving, n, title, extras, group_chat);
 		if (messaging == null) return;
 		if (group_chat) messaging.setGroupConversation(true).setConversationTitle(title);
 
-		// Add additional replies filled by us in the proxied procedure of direct-reply.
+		final List<NotificationCompat.MessagingStyle.Message> messages = messaging.getMessages();
+		if (messages.isEmpty()) return;
+		final NotificationCompat.MessagingStyle.Message last_message = messages.get(messages.size() - 1);
+		File image = null;
+		if (WeChatImageLoader.isImagePlaceholder(this, last_message.getText().toString())) {
+			if (checkSelfPermission(READ_EXTERNAL_STORAGE) == PERMISSION_GRANTED) {
+				if (mImageLoader == null) mImageLoader = new WeChatImageLoader(this);
+				image = mImageLoader.loadImage();
+				if (image != null) last_message.setData("image/jpeg", Uri.fromFile(image));	// TODO: Keep image mapping for previous messages.
+			} else n.addAction(new Notification.Action.Builder(null, getText(R.string.action_preview_image), WeChatImageLoader.buildPermissionRequest(this)).build());
+		}
+
+		if (SDK_INT <= O_MR1 && messaging.getMessages().size() == 1 && image != null) {
+			final BitmapFactory.Options options = new BitmapFactory.Options();
+			options.inPreferredConfig = SDK_INT >= O ? Bitmap.Config.HARDWARE : Bitmap.Config.ARGB_8888;
+			extras.putString(Notification.EXTRA_TEMPLATE, TEMPLATE_BIG_PICTURE);
+			extras.putParcelable(Notification.EXTRA_PICTURE, BitmapFactory.decodeFile(image.getPath(), options));
+			extras.putCharSequence(Notification.EXTRA_SUMMARY_TEXT, last_message.getText());
+		} else {
+			final Bundle addition = new Bundle();
+			messaging.addCompatExtras(addition);
+			for (final String key : addition.keySet()) {    // Copy the extras generated by MessagingStyle to notification extras.
+				final Object value = addition.get(key);
+				if (value == null) continue;
+				if (value instanceof CharSequence) extras.putCharSequence(key, (CharSequence) value);
+				else if (value instanceof Parcelable[]) extras.putParcelableArray(key, (Parcelable[]) value);
+				else if (value instanceof Bundle) extras.putBundle(key, (Bundle) value);
+				else if (value instanceof Boolean) extras.putBoolean(key, (Boolean) value);
+				else Log.e(TAG, "Unsupported extra \"" + key + "\": " + value);
+			}
+			extras.putCharSequence(NotificationCompat.EXTRA_CONVERSATION_TITLE, title);
+			extras.putString(Notification.EXTRA_TEMPLATE, TEMPLATE_MESSAGING);
+		}
+
 		if (SDK_INT >= N && extras.getCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY) != null)
 			n.flags |= Notification.FLAG_ONLY_ALERT_ONCE;		// No more alert for direct-replied notification.
-
-		final Bundle addition = new Bundle();
-		messaging.addCompatExtras(addition);
-		for (final String key : addition.keySet()) {    // Copy the extras generated by MessagingStyle to notification extras.
-			final Object value = addition.get(key);
-			if (value == null) continue;
-			if (value instanceof CharSequence) extras.putCharSequence(key, (CharSequence) value);
-			else if (value instanceof Parcelable[]) extras.putParcelableArray(key, (Parcelable[]) value);
-			else if (value instanceof Bundle) extras.putBundle(key, (Bundle) value);
-			else Log.e(TAG, "Unsupported extra \"" + key + "\": " + value);
-		}
-		extras.putCharSequence(NotificationCompat.EXTRA_CONVERSATION_TITLE, title);
-		extras.putString(Notification.EXTRA_TEMPLATE, TEMPLATE_MESSAGING);
 	}
 
 	// [Direct message with 1 unread]	Ticker: "Oasis: Hello",		Title: "Oasis",	Content: "Hello"
@@ -152,13 +185,13 @@ public class WeChatDecorator extends NevoDecoratorService {
 	// [Group chat with >1 unread]		Ticker: "Oasis: [Link] Mm",	Title: "Group",	Content: "[2]Oasis: [Link] Mm"
 	private static boolean isGroupChat(final CharSequence ticker_text, final String title, final CharSequence content_text) {
 		if (ticker_text == null || content_text == null) return false;
-		final String ticker = ticker_text.toString();	// Ticker text always starts with sender (same as title for direct message, but not for group chat).
-		final String content = content_text.toString();	// Content text includes sender for group and service messages, but not for direct messages.
-		final int pos = content.indexOf(ticker.substring(0, Math.min(10, ticker.length())));	// Seek for the first 10 chars of ticker in content.
-		if (pos >= 0 && pos <= 6) {		// Max length (up to 999 unread): [999t]
-			final String message = pos > 0 && content.charAt(0) == '[' ? content.substring(pos) : content;	// Content without unread count prefix
-			return ! message.startsWith(title + SENDER_MESSAGE_SEPARATOR);	// If positive, most probably a direct message with more than 1 unread
-		} else return false;										// Most probably a direct message with 1 unread
+		final String ticker = ticker_text.toString();    // Ticker text always starts with sender (same as title for direct message, but not for group chat).
+		final String content = content_text.toString();    // Content text includes sender for group and service messages, but not for direct messages.
+		final int pos = content.indexOf(ticker.substring(0, Math.min(10, ticker.length())));    // Seek for the first 10 chars of ticker in content.
+		if (pos >= 0 && pos <= 6) {        // Max length (up to 999 unread): [999t]
+			final String message = pos > 0 && content.charAt(0) == '[' ? content.substring(pos) : content;    // Content without unread count prefix
+			return ! message.startsWith(title + SENDER_MESSAGE_SEPARATOR);    // If positive, most probably a direct message with more than 1 unread
+		} else return false;                                        // Most probably a direct message with 1 unread
 	}
 
 	private @Nullable MessagingStyle buildFromCarExtender(final String key, final MutableNotification n, final CharSequence title, final Bundle extras, final boolean group_chat) {
@@ -175,7 +208,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 			return null;
 		}
 		final MessagingStyle messaging = new MessagingStyle(mSelf);
-		if (parcelable_messages.length == 0) {		// When only one message in this conversation
+		if (parcelable_messages.length == 0) {        // When only one message in this conversation
 			messaging.addMessage(buildMessage(n.when, title, n.tickerText, extras.getCharSequence(Notification.EXTRA_TEXT), null, group_chat));
 		} else for (int i = 0, length = parcelable_messages.length; i < length; i++) {
 			final Parcelable parcelable_message = parcelable_messages[i];
@@ -185,16 +218,16 @@ public class WeChatDecorator extends NevoDecoratorService {
 			if (text == null) continue;
 			final long timestamp = message.getLong(KEY_TIMESTAMP);
 			final CharSequence author = message.getString(KEY_AUTHOR);    // Apparently always null (not yet implemented by WeChat)
-			messaging.addMessage(buildMessage(timestamp, title, i == length -1 ? n.tickerText : null, text, author, group_chat));
+			messaging.addMessage(buildMessage(timestamp, title, i == length - 1 ? n.tickerText : null, text, author, group_chat));
 		}
 
 		final PendingIntent on_read = conversation.getParcelable(KEY_ON_READ);
-		if (on_read != null) n.deleteIntent = on_read;						// Swipe to mark read
-		final PendingIntent on_reply = conversation.getParcelable(KEY_ON_REPLY);
-		if (on_reply != null) {
+		if (on_read != null) n.deleteIntent = on_read;                        // Swipe to mark read
+		final PendingIntent on_reply;
+		if (SDK_INT >= N && (on_reply = conversation.getParcelable(KEY_ON_REPLY)) != null) {
 			final RemoteInput remote_input = conversation.getParcelable(KEY_REMOTE_INPUT);
 			if (remote_input != null) {
-				final CharSequence[] input_history = SDK_INT >= N ? extras.getCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY) : null;
+				final CharSequence[] input_history = extras.getCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY);
 				final PendingIntent proxy = proxyDirectReply(key, on_reply, remote_input, input_history, on_read);
 				final RemoteInput.Builder tweaked = new RemoteInput.Builder(remote_input.getResultKey()).addExtras(remote_input.getExtras())
 						.setAllowFreeFormInput(true);
@@ -206,7 +239,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 				} else tweaked.setLabel(remote_input.getResultKey());
 
 				final Action.Builder builder = new Action.Builder(null, getString(R.string.action_reply), proxy).addRemoteInput(tweaked.build());
-				if (SDK_INT >= N) builder.setAllowGeneratedReplies(true);		// Enable "Smart Reply"
+				builder.setAllowGeneratedReplies(true);        // Enable "Smart Reply"
 				n.addAction(builder.build());
 			}
 		}
@@ -216,13 +249,13 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private static Message buildMessage(final long when, final CharSequence title, @Nullable final CharSequence ticker, final CharSequence text,
 										@Nullable CharSequence sender, final boolean group_chat) {
 		CharSequence display_text = text;
-		if (ticker != null && (text == null || ticker.length() > text.length())) display_text = ticker;	// Prefer ticker text if longer than text
+		if (ticker != null && (text == null || ticker.length() > text.length())) display_text = ticker;    // Prefer ticker text if longer than text
 		if (sender == null) {
 			final int pos_colon = display_text.toString().indexOf(SENDER_MESSAGE_SEPARATOR);
 			if (pos_colon > 0) {
 				sender = display_text.subSequence(0, pos_colon);
 				display_text = display_text.subSequence(pos_colon + 2, display_text.length());
-				if (TextUtils.equals(title, sender)) sender = null;		// In this case, the actual sender is user itself.
+				if (TextUtils.equals(title, sender)) sender = null;        // In this case, the actual sender is user itself.
 			} else sender = title;
 		}
 
@@ -240,43 +273,47 @@ public class WeChatDecorator extends NevoDecoratorService {
 		return PendingIntent.getBroadcast(this, 0, proxy_intent, FLAG_UPDATE_CURRENT);
 	}
 
-	private final BroadcastReceiver mReplyReceiver = new BroadcastReceiver() { @RequiresApi(KITKAT_WATCH) @Override public void onReceive(final Context context, final Intent proxy_intent) {
-		final PendingIntent reply_action = proxy_intent.getParcelableExtra(EXTRA_REPLY_ACTION);
-		final String result_key = proxy_intent.getStringExtra(EXTRA_RESULT_KEY);
-		final PendingIntent mark_read_action = proxy_intent.getParcelableExtra(EXTRA_MARK_READ_ACTION);
-		final Uri data = proxy_intent.getData();
-		if (data == null || reply_action == null || result_key == null) return;		// Should never happen
-		final String key = data.getSchemeSpecificPart();
-		final ArrayList<CharSequence> input_history = SDK_INT >= N ? proxy_intent.getCharSequenceArrayListExtra(Notification.EXTRA_REMOTE_INPUT_HISTORY) : null;
-		try {
-			final Intent input_data = new Intent().setPackage(reply_action.getCreatorPackage());	// Ensure it works even if WeChat is background-restricted.
-			input_data.setClipData(proxy_intent.getClipData());
-			reply_action.send(WeChatDecorator.this, 0, input_data, new PendingIntent.OnFinished() { @Override public void onSendFinished(final PendingIntent pendingIntent, final Intent intent, final int resultCode, final String resultData, final Bundle resultExtras) {
-				final Bundle input = RemoteInput.getResultsFromIntent(input_data);
-				if (input == null) return;
-				final CharSequence text = input.getCharSequence(result_key);
-				if (BuildConfig.DEBUG) Log.d(TAG, "Reply sent: " + intent.toUri(0));
-				if (SDK_INT >= N) {
-					final Bundle addition = new Bundle();
-					final CharSequence[] inputs;
-					if (input_history != null) {
-						input_history.add(0, text);
-						inputs = input_history.toArray(new CharSequence[0]);
-					} else inputs = new CharSequence[] { text };
-					addition.putCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY, inputs);
-					recastNotification(key, addition);
-					if (mark_read_action != null) try {
-						mark_read_action.send(WeChatDecorator.this, 0, new Intent().setPackage(mark_read_action.getCreatorPackage()));
-					} catch (final PendingIntent.CanceledException e) {
-						Log.w(TAG, "Mark-read action is already canceled: " + intent.getStringExtra(KEY_CONVERSATION_ID));
+	private final BroadcastReceiver mReplyReceiver = new BroadcastReceiver() {
+		@RequiresApi(KITKAT_WATCH) @Override public void onReceive(final Context context, final Intent proxy_intent) {
+			final PendingIntent reply_action = proxy_intent.getParcelableExtra(EXTRA_REPLY_ACTION);
+			final String result_key = proxy_intent.getStringExtra(EXTRA_RESULT_KEY);
+			final PendingIntent mark_read_action = proxy_intent.getParcelableExtra(EXTRA_MARK_READ_ACTION);
+			final Uri data = proxy_intent.getData();
+			if (data == null || reply_action == null || result_key == null) return;        // Should never happen
+			final String key = data.getSchemeSpecificPart();
+			final ArrayList<CharSequence> input_history = SDK_INT >= N ? proxy_intent.getCharSequenceArrayListExtra(Notification.EXTRA_REMOTE_INPUT_HISTORY) : null;
+			try {
+				final Intent input_data = new Intent().setPackage(reply_action.getCreatorPackage());    // Ensure it works even if WeChat is background-restricted.
+				input_data.setClipData(proxy_intent.getClipData());
+				reply_action.send(WeChatDecorator.this, 0, input_data, new PendingIntent.OnFinished() {
+					@Override public void onSendFinished(final PendingIntent pendingIntent, final Intent intent, final int resultCode, final String resultData, final Bundle resultExtras) {
+						final Bundle input = RemoteInput.getResultsFromIntent(input_data);
+						if (input == null) return;
+						final CharSequence text = input.getCharSequence(result_key);
+						if (BuildConfig.DEBUG) Log.d(TAG, "Reply sent: " + intent.toUri(0));
+						if (SDK_INT >= N) {
+							final Bundle addition = new Bundle();
+							final CharSequence[] inputs;
+							if (input_history != null) {
+								input_history.add(0, text);
+								inputs = input_history.toArray(new CharSequence[0]);
+							} else inputs = new CharSequence[] { text };
+							addition.putCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY, inputs);
+							recastNotification(key, addition);
+							if (mark_read_action != null) try {
+								mark_read_action.send(WeChatDecorator.this, 0, new Intent().setPackage(mark_read_action.getCreatorPackage()));
+							} catch (final PendingIntent.CanceledException e) {
+								Log.w(TAG, "Mark-read action is already canceled: " + intent.getStringExtra(KEY_CONVERSATION_ID));
+							}
+						}
 					}
-				}
-			}}, null);
-		} catch (final PendingIntent.CanceledException e) {
-			Log.w(TAG, "Reply action is already cancelled: " + key);
-			abortBroadcast();
+				}, null);
+			} catch (final PendingIntent.CanceledException e) {
+				Log.w(TAG, "Reply action is already cancelled: " + key);
+				abortBroadcast();
+			}
 		}
-	}};
+	};
 
 	private @Nullable MessagingStyle buildFromArchive(final MutableStatusBarNotification evolving, final Notification n, final CharSequence title,
 													  final Bundle extras, final boolean group_chat) {
@@ -296,7 +333,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 			final Bundle its_extras = notification.extras;
 			final CharSequence its_title = its_extras.getCharSequence(Notification.EXTRA_TITLE);
 			if (! title.equals(its_title)) {
-				Log.d(TAG, "Skip other conversation with the same key in archive: " + its_title);	// ID reset by WeChat due to notification removal in previous evolving
+				Log.d(TAG, "Skip other conversation with the same key in archive: " + its_title);    // ID reset by WeChat due to notification removal in previous evolving
 				continue;
 			}
 			final CharSequence its_text = its_extras.getCharSequence(Notification.EXTRA_TEXT);
@@ -310,12 +347,12 @@ public class WeChatDecorator extends NevoDecoratorService {
 				CharSequence trimmed_text = its_text.subSequence(result >> 16, its_text.length());
 				if (trimmed_text.toString().startsWith(redundant_prefix))    // Remove redundant prefix
 					trimmed_text = trimmed_text.subSequence(redundant_prefix.length(), trimmed_text.length());
-				else if (trimmed_text.toString().indexOf(SENDER_MESSAGE_SEPARATOR) > 0) num_lines_with_colon ++;
+				else if (trimmed_text.toString().indexOf(SENDER_MESSAGE_SEPARATOR) > 0) num_lines_with_colon++;
 				lines.put(notification.when, text = trimmed_text);
 			} else {
 				count = 1;
 				lines.put(notification.when, text = its_text);
-				if (text.toString().indexOf(SENDER_MESSAGE_SEPARATOR) > 0) num_lines_with_colon ++;
+				if (text.toString().indexOf(SENDER_MESSAGE_SEPARATOR) > 0) num_lines_with_colon++;
 			}
 		}
 		n.number = count;
@@ -328,7 +365,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 		final MessagingStyle messaging = new MessagingStyle(mSelf);
 		final boolean sender_inline = num_lines_with_colon == lines.size();
-		for (int i = 0, size = lines.size(); i < size; i++)		// All lines have colon in text
+		for (int i = 0, size = lines.size(); i < size; i++)        // All lines have colon in text
 			messaging.addMessage(buildMessage(lines.keyAt(i), title, i == size - 1 ? n.tickerText : null, lines.valueAt(i),
 					sender_inline ? null : title, group_chat));
 		return messaging;
@@ -358,7 +395,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	@Override protected void onConnected() {
 		if (SDK_INT >= O) createNotificationChannels("com.tencent.mm", Arrays.asList(
 				makeChannel(CHANNEL_MESSAGE, R.string.channel_message),
-				makeChannel(CHANNEL_GROUP_CONVERSATION,	R.string.channel_group_message),
+				makeChannel(CHANNEL_GROUP_CONVERSATION, R.string.channel_group_message),
 				makeChannel(CHANNEL_MISC, R.string.channel_misc)));
 	}
 
@@ -389,9 +426,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	}
 
 	private Person mSelf;
-	private static final String CHANNEL_MESSAGE = "message";
-	private static final String CHANNEL_GROUP_CONVERSATION = "group";
-	private static final String CHANNEL_MISC = "misc";
+	private WeChatImageLoader mImageLoader;
 
 	private static final String TAG = "Nevo.Decorator[WeChat]";
 }

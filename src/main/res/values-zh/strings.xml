@@ -21,9 +21,11 @@
     <string name="decorator_wechat_description">为微信通知带来符合当代 Android 的最佳体验：可展开的会话样式、直接回复、划除即已读等高级特性。</string>
     <string name="self_display_name">你</string>
     <string name="action_reply">回复</string>
+    <string name="action_preview_image">预览图片</string>
 
     <string name="settings_experience_upgrade_title">进一步升级体验</string>
     <string name="settings_experience_upgrade_text">需要安装 Android Auto 以支持“直接回复”等高级特性。</string>
+    <string name="toast_image_preview_activated">图片预览将在此后收到的消息中展现</string>
 
     <string name="channel_message">消息</string>
     <string name="channel_group_message">群组消息</string>

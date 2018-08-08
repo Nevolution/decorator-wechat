@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="text_placeholders_for_picture">
+        <item>[图片]</item>
+        <item>[Photo]</item>
+    </string-array>
+</resources>

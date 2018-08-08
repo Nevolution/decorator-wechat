@@ -21,9 +21,11 @@
     <string name="decorator_wechat_description">Enhance WeChat notifications with expandable conversation, direct reply, swipe to mark read and more.</string>
     <string name="self_display_name">You</string>
     <string name="action_reply">Reply</string>
+    <string name="action_preview_image">Preview Image</string>
 
     <string name="settings_experience_upgrade_title">Upgrade the experience further</string>
     <string name="settings_experience_upgrade_text">Android Auto needs to be installed to support \"Direct Reply\" and other enhancements.</string>
+    <string name="toast_image_preview_activated">Image preview will show up for future messages.</string>
 
     <string name="channel_message">Messages</string>
     <string name="channel_group_message">Group Conversations</string>
