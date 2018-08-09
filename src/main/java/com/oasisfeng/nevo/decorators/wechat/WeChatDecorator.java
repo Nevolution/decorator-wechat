@@ -95,6 +95,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private static final String KEY_CONVERSATION_ID = "key_username";    // The internal conversation ID in WeChat.
 
 	private static final String ACTION_REPLY = "REPLY";
+	private static final String ACTION_MARK_READ = "MARK_READ";
 	private static final String SCHEME_KEY = "key";
 	private static final String EXTRA_REPLY_ACTION = "pending_intent";
 	private static final String EXTRA_RESULT_KEY = "result_key";
@@ -222,7 +223,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		}
 
 		final PendingIntent on_read = conversation.getParcelable(KEY_ON_READ);
-		if (on_read != null) n.deleteIntent = on_read;                        // Swipe to mark read
+		if (on_read != null) n.deleteIntent = proxyMarkRead(key, on_read);		// Swipe to mark read
 		final PendingIntent on_reply;
 		if (SDK_INT >= N && (on_reply = conversation.getParcelable(KEY_ON_REPLY)) != null) {
 			final RemoteInput remote_input = conversation.getParcelable(KEY_REMOTE_INPUT);
@@ -273,6 +274,12 @@ public class WeChatDecorator extends NevoDecoratorService {
 		return PendingIntent.getBroadcast(this, 0, proxy_intent, FLAG_UPDATE_CURRENT);
 	}
 
+	private PendingIntent proxyMarkRead(final String key, final PendingIntent on_read) {
+		final Intent proxy_intent = new Intent(ACTION_MARK_READ).setData(Uri.fromParts(SCHEME_KEY, key, null)).setPackage(getPackageName())
+				.putExtra(EXTRA_MARK_READ_ACTION, on_read);
+		return PendingIntent.getBroadcast(this, 0, proxy_intent, FLAG_UPDATE_CURRENT);
+	}
+
 	private final BroadcastReceiver mReplyReceiver = new BroadcastReceiver() {
 		@RequiresApi(KITKAT_WATCH) @Override public void onReceive(final Context context, final Intent proxy_intent) {
 			final PendingIntent reply_action = proxy_intent.getParcelableExtra(EXTRA_REPLY_ACTION);
@@ -314,6 +321,17 @@ public class WeChatDecorator extends NevoDecoratorService {
 			}
 		}
 	};
+
+	private final BroadcastReceiver mMarkReadReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context context, final Intent proxy_intent) {
+		final Uri data = proxy_intent.getData();
+		final PendingIntent action = proxy_intent.getParcelableExtra(EXTRA_MARK_READ_ACTION);
+		if (data == null || action == null) return;
+		try {
+			action.send(context, 0, new Intent().setPackage(action.getCreatorPackage()));	// Ensure it works even if WeChat is background-restricted.
+		} catch (final PendingIntent.CanceledException e) {
+			Log.w(TAG, "Reply action is already cancelled: " + data.getSchemeSpecificPart());
+		}
+	}};
 
 	private @Nullable MessagingStyle buildFromArchive(final MutableStatusBarNotification evolving, final Notification n, final CharSequence title,
 													  final Bundle extras, final boolean group_chat) {
@@ -415,12 +433,17 @@ public class WeChatDecorator extends NevoDecoratorService {
 		//if (SDK_INT > O_MR1) self.setUri(ContactsContract.Profile.CONTENT_URI.toString());
 		mSelf = self.build();
 
-		final IntentFilter filter = new IntentFilter(ACTION_REPLY);
+		IntentFilter filter = new IntentFilter(ACTION_REPLY);
 		filter.addDataScheme(SCHEME_KEY);
 		registerReceiver(mReplyReceiver, filter);
+
+		filter = new IntentFilter(ACTION_MARK_READ);
+		filter.addDataScheme(SCHEME_KEY);
+		registerReceiver(mMarkReadReceiver, filter);
 	}
 
 	@Override public void onDestroy() {
+		try { unregisterReceiver(mMarkReadReceiver); } catch (final RuntimeException ignored) {}
 		try { unregisterReceiver(mReplyReceiver); } catch (final RuntimeException ignored) {}
 		super.onDestroy();
 	}
