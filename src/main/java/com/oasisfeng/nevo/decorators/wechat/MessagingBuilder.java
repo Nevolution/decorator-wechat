@@ -170,14 +170,14 @@ public class MessagingBuilder {
 		if (sender == null) {
 			final int pos_colon = display_text.toString().indexOf(SENDER_MESSAGE_SEPARATOR);
 			if (pos_colon > 0) {
-				sender = display_text.subSequence(0, pos_colon);
+				sender = EmojiTranslator.translate(display_text.subSequence(0, pos_colon));
 				display_text = display_text.subSequence(pos_colon + 2, display_text.length());
 				if (TextUtils.equals(title, sender)) sender = null;		// In this case, the actual sender is user itself.
 			} else sender = title;
 		}
 
 		final Person person = group_chat ? (sender != null ? new Person.Builder().setName(sender).build() : null) : SENDER_PLACEHOLDER;
-		return new MessagingStyle.Message(display_text, when, person);
+		return new MessagingStyle.Message(EmojiTranslator.translate(display_text), when, person);
 	}
 
 	/** @return the extracted count in 0xFF range and start position in 0xFF00 range */

@@ -72,11 +72,13 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final MutableNotification n = evolving.getNotification();
 		final Bundle extras = n.extras;
 
-		final CharSequence title = extras.getCharSequence(EXTRA_TITLE);
+		CharSequence title = extras.getCharSequence(EXTRA_TITLE);
 		if (title == null || title.length() == 0) {
 			Log.e(TAG, "Title is missing: " + evolving);
 			return;
 		}
+		if (title != (title = EmojiTranslator.translate(title))) extras.putCharSequence(EXTRA_TITLE, title);
+
 		final int original_id = evolving.getOriginalId();
 		if (BuildConfig.DEBUG) extras.putString("nevo.debug", "ID:" + original_id + ",t:" + n.tickerText);
 
@@ -90,7 +92,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 			return;
 		}
 
-		evolving.setId(title.hashCode());
+		evolving.setId(title.hashCode());	// Don't use the hash code of original title, which might have already evolved.
 		extras.putBoolean(Notification.EXTRA_SHOW_WHEN, true);
 		if (BuildConfig.DEBUG) n.flags &= ~ Notification.FLAG_LOCAL_ONLY;
 
@@ -100,7 +102,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (SDK_INT >= O) n.setChannelId(group_chat ? CHANNEL_GROUP_CONVERSATION : CHANNEL_MESSAGE);
 
 		MessagingStyle messaging = mMessagingBuilder.buildFromExtender(evolving.getKey(), n, title, group_chat);
-		if (messaging == null)
+		if (messaging == null)	// EXTRA_TEXT will be written in buildFromArchive()
 			messaging = mMessagingBuilder.buildFromArchive(n, title, group_chat, getArchivedNotifications(evolving.getOriginalKey(), MAX_NUM_ARCHIVED));
 		if (messaging == null) return;
 		if (group_chat) messaging.setGroupConversation(true).setConversationTitle(title);
