@@ -42,6 +42,7 @@ import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationCompat.MessagingStyle;
 
 import static android.Manifest.permission.READ_EXTERNAL_STORAGE;
+import static android.app.Notification.EXTRA_TITLE;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION;
 import static android.media.AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT;
@@ -71,7 +72,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final MutableNotification n = evolving.getNotification();
 		final Bundle extras = n.extras;
 
-		final CharSequence title = extras.getCharSequence(Notification.EXTRA_TITLE);
+		final CharSequence title = extras.getCharSequence(EXTRA_TITLE);
 		if (title == null || title.length() == 0) {
 			Log.e(TAG, "Title is missing: " + evolving);
 			return;
@@ -98,7 +99,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		n.setSortKey(String.valueOf(Long.MAX_VALUE - n.when + (group_chat ? GROUP_CHAT_SORT_KEY_SHIFT : 0)));    // Place group chat below other messages
 		if (SDK_INT >= O) n.setChannelId(group_chat ? CHANNEL_GROUP_CONVERSATION : CHANNEL_MESSAGE);
 
-		MessagingStyle messaging = mMessagingBuilder.buildFromCarExtender(evolving.getKey(), n, title, extras, group_chat);
+		MessagingStyle messaging = mMessagingBuilder.buildFromExtender(evolving.getKey(), n, title, group_chat);
 		if (messaging == null)
 			messaging = mMessagingBuilder.buildFromArchive(n, title, group_chat, getArchivedNotifications(evolving.getOriginalKey(), MAX_NUM_ARCHIVED));
 		if (messaging == null) return;
