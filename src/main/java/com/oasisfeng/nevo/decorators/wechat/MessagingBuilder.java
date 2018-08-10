@@ -172,7 +172,6 @@ public class MessagingBuilder {
 	private static NotificationCompat.MessagingStyle.Message buildMessage(final long when, final CharSequence title, @Nullable final CharSequence ticker, final CharSequence text,
 																		  @Nullable CharSequence sender, final boolean group_chat) {
 		CharSequence display_text = text;
-		if (ticker != null && (text == null || ticker.length() > text.length())) display_text = ticker;    // Prefer ticker text if longer than text
 		if (sender == null) {
 			final int pos_colon = display_text.toString().indexOf(SENDER_MESSAGE_SEPARATOR);
 			if (pos_colon > 0) {
