@@ -30,6 +30,7 @@ import static android.app.Notification.EXTRA_REMOTE_INPUT_HISTORY;
 import static android.app.PendingIntent.FLAG_UPDATE_CURRENT;
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.N;
+import static android.os.Build.VERSION_CODES.O_MR1;
 import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.SENDER_MESSAGE_SEPARATOR;
 
 /**
@@ -150,7 +151,7 @@ public class MessagingBuilder {
 			final CharSequence[] input_history = n.extras.getCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY);
 			final PendingIntent proxy = proxyDirectReply(key, on_reply, remote_input, input_history, on_read);
 			final RemoteInput.Builder tweaked = new RemoteInput.Builder(remote_input.getResultKey()).addExtras(remote_input.getExtras())
-					.setAllowFreeFormInput(true);
+					.setAllowFreeFormInput(true).setChoices(SmartReply.generateChoices(messaging));
 			final String[] participants = conversation.getStringArray(KEY_PARTICIPANTS);
 			if (participants != null && participants.length > 0) {
 				final StringBuilder label = new StringBuilder();
@@ -158,8 +159,10 @@ public class MessagingBuilder {
 				tweaked.setLabel(label.subSequence(1, label.length()));
 			} else tweaked.setLabel(remote_input.getResultKey());
 
-			n.addAction(new Action.Builder(null, mContext.getString(R.string.action_reply), proxy).addRemoteInput(tweaked.build())
-					.setAllowGeneratedReplies(true).build());        // Enable "Smart Reply"
+			final Action.Builder action = new Action.Builder(null, mContext.getString(R.string.action_reply), proxy)
+					.addRemoteInput(tweaked.build()).setAllowGeneratedReplies(true);
+			if (SDK_INT > O_MR1) action.setSemanticAction(Action.SEMANTIC_ACTION_REPLY);
+			n.addAction(action.build());
 		}
 		return messaging;
 	}
