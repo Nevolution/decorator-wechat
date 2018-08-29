@@ -30,7 +30,7 @@ import static android.app.PendingIntent.FLAG_UPDATE_CURRENT;
  */
 public class WeChatImageLoader {
 
-	private static final long MAX_TIME_DIFF = 3_000;
+	private static final long MAX_TIME_DIFF = 2_000;
 	private static final File WECHAT_PATH = new File(Environment.getExternalStorageDirectory(), "/Tencent/MicroMsg");
 
 	static boolean isImagePlaceholder(final Context context, final String text) {
@@ -47,9 +47,9 @@ public class WeChatImageLoader {
 			long best_time_diff = Long.MAX_VALUE;
 			for (final File child : path.listFiles()) {
 				final String name = child.getName();
-				boolean large = false;
-				if (child.isFile()) {
-					if (! (large = name.endsWith(".jpg")) && ! name.startsWith("th_")) continue;	// "th_xxx" is thumbnail.
+				final boolean is_file = child.isFile(), large = is_file && name.endsWith(".jpg");
+				if (is_file) {
+					if (! large && ! name.startsWith("th_")) continue;	// "th_xxx" is thumbnail.
 				} else if (! child.isDirectory()) continue;
 				final long time_diff = now - child.lastModified();
 				if (time_diff > 0 && time_diff < MAX_TIME_DIFF) {
@@ -57,6 +57,7 @@ public class WeChatImageLoader {
 						best_match = child;
 						break;
 					}
+					if (! is_file && Math.abs(time_diff - best_time_diff) < MAX_TIME_DIFF) return null;		// Drop indistinct case to avoid mismatch
 					if (time_diff >= best_time_diff) continue;
 					best_match = child;
 					best_time_diff = time_diff;
