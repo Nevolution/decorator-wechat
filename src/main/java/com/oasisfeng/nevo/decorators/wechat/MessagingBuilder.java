@@ -13,6 +13,7 @@ import android.os.Bundle;
 import android.os.Parcelable;
 import android.service.notification.StatusBarNotification;
 import android.text.TextUtils;
+import android.util.ArrayMap;
 import android.util.Log;
 import android.util.LongSparseArray;
 
@@ -21,6 +22,7 @@ import com.oasisfeng.nevo.sdk.MutableNotification;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat.MessagingStyle;
@@ -30,7 +32,7 @@ import static android.app.Notification.EXTRA_REMOTE_INPUT_HISTORY;
 import static android.app.PendingIntent.FLAG_UPDATE_CURRENT;
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.N;
-import static android.os.Build.VERSION_CODES.O_MR1;
+import static android.os.Build.VERSION_CODES.P;
 import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.SENDER_MESSAGE_SEPARATOR;
 
 /**
@@ -44,11 +46,9 @@ public class MessagingBuilder {
 	private static final Person SENDER_PLACEHOLDER = new Person.Builder().setName(" ").build();	// Cannot be empty string, or it will be treated as null.
 
 	private static final String ACTION_REPLY = "REPLY";
-	private static final String ACTION_MARK_READ = "MARK_READ";
 	private static final String SCHEME_KEY = "key";
 	private static final String EXTRA_REPLY_ACTION = "pending_intent";
 	private static final String EXTRA_RESULT_KEY = "result_key";
-	private static final String EXTRA_MARK_READ_ACTION = "mark_read";
 
 	/* From Notification.CarExtender */
 	private static final String EXTRA_CAR_EXTENDER = "android.car.EXTENSIONS";
@@ -62,8 +62,6 @@ public class MessagingBuilder {
 	private static final String KEY_ON_READ = "on_read";
 	private static final String KEY_PARTICIPANTS = "participants";
 	private static final String KEY_TIMESTAMP = "timestamp";
-
-	private static final String KEY_CONVERSATION_ID = "key_username";	// The internal conversation ID in WeChat.
 
 	@Nullable MessagingStyle buildFromArchive(final Notification n, final CharSequence title, final boolean group_chat, final List<StatusBarNotification> archive) {
 		// Chat history in big content view
@@ -145,11 +143,12 @@ public class MessagingBuilder {
 		}
 
 		final PendingIntent on_read = conversation.getParcelable(KEY_ON_READ);
-		if (on_read != null) n.deleteIntent = proxyMarkRead(key, on_read);		// Swipe to mark read
+		if (on_read != null) mMarkReadPendingIntents.put(key, on_read);
+
 		final PendingIntent on_reply; final RemoteInput remote_input;
 		if (SDK_INT >= N && (on_reply = conversation.getParcelable(KEY_ON_REPLY)) != null && (remote_input = conversation.getParcelable(KEY_REMOTE_INPUT)) != null) {
 			final CharSequence[] input_history = n.extras.getCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY);
-			final PendingIntent proxy = proxyDirectReply(key, on_reply, remote_input, input_history, on_read);
+			final PendingIntent proxy = proxyDirectReply(key, on_reply, remote_input, input_history);
 			final RemoteInput.Builder tweaked = new RemoteInput.Builder(remote_input.getResultKey()).addExtras(remote_input.getExtras())
 					.setAllowFreeFormInput(true).setChoices(SmartReply.generateChoices(messaging));
 			final String[] participants = conversation.getStringArray(KEY_PARTICIPANTS);
@@ -161,7 +160,7 @@ public class MessagingBuilder {
 
 			final Action.Builder action = new Action.Builder(null, mContext.getString(R.string.action_reply), proxy)
 					.addRemoteInput(tweaked.build()).setAllowGeneratedReplies(true);
-			if (SDK_INT > O_MR1) action.setSemanticAction(Action.SEMANTIC_ACTION_REPLY);
+			if (SDK_INT >= P) action.setSemanticAction(Action.SEMANTIC_ACTION_REPLY);
 			n.addAction(action.build());
 		}
 		return messaging;
@@ -206,16 +205,11 @@ public class MessagingBuilder {
 
 	/** Intercept the PendingIntent in RemoteInput to update the notification with replied message upon success. */
 	private PendingIntent proxyDirectReply(final String key, final PendingIntent on_reply, final RemoteInput remote_input,
-										   final @Nullable CharSequence[] input_history, final PendingIntent on_read) {
-		final Intent proxy_intent = new Intent(ACTION_REPLY).putExtra(EXTRA_REPLY_ACTION, on_reply).putExtra(EXTRA_MARK_READ_ACTION, on_read)
-				.putExtra(EXTRA_RESULT_KEY, remote_input.getResultKey());
+										   final @Nullable CharSequence[] input_history) {
+		final Intent proxy = new Intent(ACTION_REPLY).putExtra(EXTRA_REPLY_ACTION, on_reply).putExtra(EXTRA_RESULT_KEY, remote_input.getResultKey());
 		if (SDK_INT >= N && input_history != null)
-			proxy_intent.putCharSequenceArrayListExtra(EXTRA_REMOTE_INPUT_HISTORY, new ArrayList<>(Arrays.asList(input_history)));
-		return buildProxyPendingIntent(proxy_intent, key);
-	}
-
-	private PendingIntent proxyMarkRead(final String key, final PendingIntent on_read) {
-		return buildProxyPendingIntent(new Intent(ACTION_MARK_READ).putExtra(EXTRA_MARK_READ_ACTION, on_read), key);
+			proxy.putCharSequenceArrayListExtra(EXTRA_REMOTE_INPUT_HISTORY, new ArrayList<>(Arrays.asList(input_history)));
+		return buildProxyPendingIntent(proxy, key);
 	}
 
 	private PendingIntent buildProxyPendingIntent(final Intent intent, final String key) {
@@ -226,7 +220,6 @@ public class MessagingBuilder {
 	private final BroadcastReceiver mReplyReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context context, final Intent proxy_intent) {
 		final PendingIntent reply_action = proxy_intent.getParcelableExtra(EXTRA_REPLY_ACTION);
 		final String result_key = proxy_intent.getStringExtra(EXTRA_RESULT_KEY);
-		final PendingIntent mark_read_action = proxy_intent.getParcelableExtra(EXTRA_MARK_READ_ACTION);
 		final Uri data = proxy_intent.getData();
 		if (data == null || reply_action == null || result_key == null) return;        // Should never happen
 		final String key = data.getSchemeSpecificPart();
@@ -248,11 +241,7 @@ public class MessagingBuilder {
 					} else inputs = new CharSequence[] { text };
 					addition.putCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY, inputs);
 					mController.recastNotification(key, addition);
-					if (mark_read_action != null) try {
-						mark_read_action.send(mContext, 0, new Intent().setPackage(mark_read_action.getCreatorPackage()));
-					} catch (final PendingIntent.CanceledException e) {
-						Log.w(TAG, "Mark-read action is already canceled: " + intent.getStringExtra(KEY_CONVERSATION_ID));
-					}
+					markRead(key);
 				}
 			}, null);
 		} catch (final PendingIntent.CanceledException e) {
@@ -261,16 +250,15 @@ public class MessagingBuilder {
 		}
 	}};
 
-	private final BroadcastReceiver mMarkReadReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context context, final Intent proxy_intent) {
-		final Uri data = proxy_intent.getData();
-		final PendingIntent action = proxy_intent.getParcelableExtra(EXTRA_MARK_READ_ACTION);
-		if (data == null || action == null) return;
+	void markRead(final String key) {
+		final PendingIntent action = mMarkReadPendingIntents.remove(key);
+		if (action == null) return;
 		try {
-			action.send(context, 0, new Intent().setPackage(action.getCreatorPackage()));	// Ensure it works even if WeChat is background-restricted.
+			action.send(mContext, 0, new Intent().setPackage(action.getCreatorPackage()));	// Ensure it works even if WeChat is background-restricted.
 		} catch (final PendingIntent.CanceledException e) {
-			Log.w(TAG, "Reply action is already cancelled: " + data.getSchemeSpecificPart());
+			Log.w(TAG, "Mark-read action is already cancelled: " + key);
 		}
-	}};
+	}
 
 	interface Controller { void recastNotification(String key, Bundle addition); }
 
@@ -282,22 +270,18 @@ public class MessagingBuilder {
 		//if (SDK_INT > O_MR1) self.setUri(ContactsContract.Profile.CONTENT_URI.toString());
 		mSelf = self.build();
 
-		IntentFilter filter = new IntentFilter(ACTION_REPLY);
+		final IntentFilter filter = new IntentFilter(ACTION_REPLY);
 		filter.addDataScheme(SCHEME_KEY);
 		context.registerReceiver(mReplyReceiver, filter);
-
-		filter = new IntentFilter(ACTION_MARK_READ);
-		filter.addDataScheme(SCHEME_KEY);
-		context.registerReceiver(mMarkReadReceiver, filter);
 	}
 
 	void close() {
-		try { mContext.unregisterReceiver(mMarkReadReceiver); } catch (final RuntimeException ignored) {}
 		try { mContext.unregisterReceiver(mReplyReceiver); } catch (final RuntimeException ignored) {}
 	}
 
 	private final Context mContext;
 	private final Controller mController;
 	private final Person mSelf;
+	private final Map<String/* original key */, PendingIntent> mMarkReadPendingIntents = new ArrayMap<>();
 	private static final String TAG = WeChatDecorator.TAG;
 }

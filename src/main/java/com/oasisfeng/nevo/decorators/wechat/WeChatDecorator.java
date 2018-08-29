@@ -50,6 +50,8 @@ import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.N;
 import static android.os.Build.VERSION_CODES.O;
 import static android.os.Build.VERSION_CODES.O_MR1;
+import static android.service.notification.NotificationListenerService.REASON_APP_CANCEL;
+import static android.service.notification.NotificationListenerService.REASON_CANCEL;
 
 /**
  * Bring state-of-art notification experience to WeChat.
@@ -84,15 +86,16 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 		n.color = PRIMARY_COLOR;        // Tint the small icon
 
-		// WeChat uses dynamic counter as notification ID, which unfortunately will be reset upon evolving (removal, to be exact) by us,
-		// causing all messages combined into one notification. So we split them by re-coding the notification ID by title.
 		if (original_id < NID_CONVERSATION_START) {
 			if (SDK_INT >= O) n.setChannelId(CHANNEL_MISC);
 			Log.d(TAG, "Skip further process for non-conversation notification. ID: " + original_id);    // E.g. web login confirmation notification.
 			return;
 		}
 
-		evolving.setId(title.hashCode());	// Don't use the hash code of original title, which might have already evolved.
+		// WeChat uses dynamic counter as notification ID, which will be reused by future conversations when cancelled by WeChat itself,
+		//   causing conversation notifications overwritten or duplicate.
+		evolving.setId(title.hashCode());		// Don't use the hash code of original title, which might have already evolved.
+
 		extras.putBoolean(Notification.EXTRA_SHOW_WHEN, true);
 		if (BuildConfig.DEBUG) n.flags &= ~ Notification.FLAG_LOCAL_ONLY;
 
@@ -101,7 +104,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		n.setSortKey(String.valueOf(Long.MAX_VALUE - n.when + (group_chat ? GROUP_CHAT_SORT_KEY_SHIFT : 0)));    // Place group chat below other messages
 		if (SDK_INT >= O) n.setChannelId(group_chat ? CHANNEL_GROUP_CONVERSATION : CHANNEL_MESSAGE);
 
-		MessagingStyle messaging = mMessagingBuilder.buildFromExtender(evolving.getKey(), n, title, group_chat);
+		MessagingStyle messaging = mMessagingBuilder.buildFromExtender(evolving.getOriginalKey(), n, title, group_chat);
 		if (messaging == null)	// EXTRA_TEXT will be written in buildFromArchive()
 			messaging = mMessagingBuilder.buildFromArchive(n, title, group_chat, getArchivedNotifications(evolving.getOriginalKey(), MAX_NUM_ARCHIVED));
 		if (messaging == null) return;
@@ -160,6 +163,16 @@ public class WeChatDecorator extends NevoDecoratorService {
 			return ! message.startsWith(title + SENDER_MESSAGE_SEPARATOR);    // If positive, most probably a direct message with more than 1 unread
 		} else return false;                                        // Most probably a direct message with 1 unread
 	}
+
+	@Override protected void onNotificationRemoved(final String key, final int reason) {
+		if (reason == REASON_CANCEL) {
+			mMessagingBuilder.markRead(key);
+		} else if (reason == REASON_APP_CANCEL) {
+			Log.d(TAG, "Cancel notification: " + key);
+			cancelNotification(key);	// Will cancel all notifications evolved from the this original key.
+		}
+	}
+
 	@Override protected void onConnected() {
 		if (SDK_INT >= O) createNotificationChannels("com.tencent.mm", Arrays.asList(
 				makeChannel(CHANNEL_MESSAGE, R.string.channel_message),
