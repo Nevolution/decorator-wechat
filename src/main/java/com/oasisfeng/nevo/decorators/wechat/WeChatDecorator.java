@@ -104,7 +104,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		n.setSortKey(String.valueOf(Long.MAX_VALUE - n.when + (group_chat ? GROUP_CHAT_SORT_KEY_SHIFT : 0)));    // Place group chat below other messages
 		if (SDK_INT >= O) n.setChannelId(group_chat ? CHANNEL_GROUP_CONVERSATION : CHANNEL_MESSAGE);
 
-		MessagingStyle messaging = mMessagingBuilder.buildFromExtender(evolving.getOriginalKey(), n, title, group_chat);
+		MessagingStyle messaging = mMessagingBuilder.buildFromExtender(evolving, title, group_chat);
 		if (messaging == null)	// EXTRA_TEXT will be written in buildFromArchive()
 			messaging = mMessagingBuilder.buildFromArchive(n, title, group_chat, getArchivedNotifications(evolving.getOriginalKey(), MAX_NUM_ARCHIVED));
 		if (messaging == null) return;
@@ -165,11 +165,11 @@ public class WeChatDecorator extends NevoDecoratorService {
 	}
 
 	@Override protected void onNotificationRemoved(final String key, final int reason) {
-		if (reason == REASON_CANCEL) {
-			mMessagingBuilder.markRead(key);
-		} else if (reason == REASON_APP_CANCEL) {
+		if (reason == REASON_APP_CANCEL) {		// Only if "Removal-Aware" of Nevolution is activated
 			Log.d(TAG, "Cancel notification: " + key);
-			cancelNotification(key);	// Will cancel all notifications evolved from the this original key.
+			cancelNotification(key);	// Will cancel all notifications evolved from this original key, thus trigger the "else" branch below
+		} else if (SDK_INT < O || reason == REASON_CANCEL) {	// Exclude the removal request by us in above case. (Removal-Aware is only supported on Android 8+)
+			mMessagingBuilder.markRead(key);
 		}
 	}
 

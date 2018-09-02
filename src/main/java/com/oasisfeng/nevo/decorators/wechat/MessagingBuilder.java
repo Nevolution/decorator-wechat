@@ -18,6 +18,7 @@ import android.util.Log;
 import android.util.LongSparseArray;
 
 import com.oasisfeng.nevo.sdk.MutableNotification;
+import com.oasisfeng.nevo.sdk.MutableStatusBarNotification;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,6 +50,7 @@ public class MessagingBuilder {
 	private static final String SCHEME_KEY = "key";
 	private static final String EXTRA_REPLY_ACTION = "pending_intent";
 	private static final String EXTRA_RESULT_KEY = "result_key";
+	private static final String EXTRA_ORIGINAL_KEY = "original_key";
 
 	/* From Notification.CarExtender */
 	private static final String EXTRA_CAR_EXTENDER = "android.car.EXTENSIONS";
@@ -116,7 +118,8 @@ public class MessagingBuilder {
 		return messaging;
 	}
 
-	@Nullable MessagingStyle buildFromExtender(final String key, final MutableNotification n, final CharSequence title, final boolean group_chat) {
+	@Nullable MessagingStyle buildFromExtender(final MutableStatusBarNotification sbn, final CharSequence title, final boolean group_chat) {
+		final MutableNotification n = sbn.getNotification();
 		final Bundle car_extender = n.extras.getBundle(EXTRA_CAR_EXTENDER);
 		if (car_extender == null) return null;
 		final Bundle conversation = car_extender.getBundle(EXTRA_CONVERSATION);
@@ -143,12 +146,12 @@ public class MessagingBuilder {
 		}
 
 		final PendingIntent on_read = conversation.getParcelable(KEY_ON_READ);
-		if (on_read != null) mMarkReadPendingIntents.put(key, on_read);
+		if (on_read != null) mMarkReadPendingIntents.put(sbn.getKey(), on_read);	// Mapped by evolved key,
 
 		final PendingIntent on_reply; final RemoteInput remote_input;
 		if (SDK_INT >= N && (on_reply = conversation.getParcelable(KEY_ON_REPLY)) != null && (remote_input = conversation.getParcelable(KEY_REMOTE_INPUT)) != null) {
 			final CharSequence[] input_history = n.extras.getCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY);
-			final PendingIntent proxy = proxyDirectReply(key, on_reply, remote_input, input_history);
+			final PendingIntent proxy = proxyDirectReply(sbn, on_reply, remote_input, input_history);
 			final RemoteInput.Builder tweaked = new RemoteInput.Builder(remote_input.getResultKey()).addExtras(remote_input.getExtras())
 					.setAllowFreeFormInput(true).setChoices(SmartReply.generateChoices(messaging));
 			final String[] participants = conversation.getStringArray(KEY_PARTICIPANTS);
@@ -204,17 +207,13 @@ public class MessagingBuilder {
 	}
 
 	/** Intercept the PendingIntent in RemoteInput to update the notification with replied message upon success. */
-	private PendingIntent proxyDirectReply(final String key, final PendingIntent on_reply, final RemoteInput remote_input,
+	private PendingIntent proxyDirectReply(final MutableStatusBarNotification sbn, final PendingIntent on_reply, final RemoteInput remote_input,
 										   final @Nullable CharSequence[] input_history) {
-		final Intent proxy = new Intent(ACTION_REPLY).putExtra(EXTRA_REPLY_ACTION, on_reply).putExtra(EXTRA_RESULT_KEY, remote_input.getResultKey());
+		final Intent proxy = new Intent(ACTION_REPLY).putExtra(EXTRA_REPLY_ACTION, on_reply).putExtra(EXTRA_RESULT_KEY, remote_input.getResultKey())
+				.setData(Uri.fromParts(SCHEME_KEY, sbn.getKey(), null)).putExtra(EXTRA_ORIGINAL_KEY, sbn.getOriginalKey());
 		if (SDK_INT >= N && input_history != null)
 			proxy.putCharSequenceArrayListExtra(EXTRA_REMOTE_INPUT_HISTORY, new ArrayList<>(Arrays.asList(input_history)));
-		return buildProxyPendingIntent(proxy, key);
-	}
-
-	private PendingIntent buildProxyPendingIntent(final Intent intent, final String key) {
-		intent.setData(Uri.fromParts(SCHEME_KEY, key, null)).setPackage(mContext.getPackageName());
-		return PendingIntent.getBroadcast(mContext, 0, intent, FLAG_UPDATE_CURRENT);
+		return PendingIntent.getBroadcast(mContext, 0, proxy.setPackage(mContext.getPackageName()), FLAG_UPDATE_CURRENT);
 	}
 
 	private final BroadcastReceiver mReplyReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context context, final Intent proxy_intent) {
@@ -222,7 +221,7 @@ public class MessagingBuilder {
 		final String result_key = proxy_intent.getStringExtra(EXTRA_RESULT_KEY);
 		final Uri data = proxy_intent.getData();
 		if (data == null || reply_action == null || result_key == null) return;        // Should never happen
-		final String key = data.getSchemeSpecificPart();
+		final String key = data.getSchemeSpecificPart(), original_key = proxy_intent.getStringExtra(EXTRA_ORIGINAL_KEY);
 		final ArrayList<CharSequence> input_history = SDK_INT >= N ? proxy_intent.getCharSequenceArrayListExtra(EXTRA_REMOTE_INPUT_HISTORY) : null;
 		try {
 			final Intent input_data = new Intent().setPackage(reply_action.getCreatorPackage());    // Ensure it works even if WeChat is background-restricted.
@@ -240,7 +239,7 @@ public class MessagingBuilder {
 						inputs = input_history.toArray(new CharSequence[0]);
 					} else inputs = new CharSequence[] { text };
 					addition.putCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY, inputs);
-					mController.recastNotification(key, addition);
+					mController.recastNotification(original_key != null ? original_key : key, addition);
 					markRead(key);
 				}
 			}, null);
@@ -250,6 +249,7 @@ public class MessagingBuilder {
 		}
 	}};
 
+	/** @param key the evolved key */
 	void markRead(final String key) {
 		final PendingIntent action = mMarkReadPendingIntents.remove(key);
 		if (action == null) return;
@@ -282,6 +282,6 @@ public class MessagingBuilder {
 	private final Context mContext;
 	private final Controller mController;
 	private final Person mSelf;
-	private final Map<String/* original key */, PendingIntent> mMarkReadPendingIntents = new ArrayMap<>();
+	private final Map<String/* evolved key */, PendingIntent> mMarkReadPendingIntents = new ArrayMap<>();
 	private static final String TAG = WeChatDecorator.TAG;
 }
