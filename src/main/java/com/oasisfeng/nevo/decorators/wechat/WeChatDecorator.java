@@ -68,6 +68,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private static final String CHANNEL_MISC = "misc";
 
 	private static final @ColorInt int PRIMARY_COLOR = 0xFF33B332;
+	private static final @ColorInt int LIGHT_COLOR = 0xFF00FF00;
 	static final String SENDER_MESSAGE_SEPARATOR = ": ";
 
 	@Override public void apply(final MutableStatusBarNotification evolving) {
@@ -185,7 +186,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		channel.setSound(Uri.EMPTY,	// Default to none, due to sound being actually played by WeChat app itself (not via Notification).
 				new AudioAttributes.Builder().setUsage(USAGE_NOTIFICATION_COMMUNICATION_INSTANT).setContentType(CONTENT_TYPE_SONIFICATION).build());
 		channel.enableLights(true);
-		channel.setLightColor(PRIMARY_COLOR);
+		channel.setLightColor(LIGHT_COLOR);
 		return channel;
 	}
 
