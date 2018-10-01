@@ -19,6 +19,8 @@ package com.oasisfeng.nevo.decorators.wechat;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.AudioAttributes;
@@ -62,7 +64,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	private static final int MAX_NUM_ARCHIVED = 20;
 	private static final long GROUP_CHAT_SORT_KEY_SHIFT = 24 * 60 * 60 * 1000L;        // Sort group chat as one day older message.
-	private static final int NID_CONVERSATION_START = 4096;
 	private static final String CHANNEL_MESSAGE = "message";
 	private static final String CHANNEL_GROUP_CONVERSATION = "group";
 	private static final String CHANNEL_MISC = "misc";
@@ -87,15 +88,16 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 		n.color = PRIMARY_COLOR;        // Tint the small icon
 
-		if (original_id < NID_CONVERSATION_START) {
+		if (n.tickerText == null) {
 			if (SDK_INT >= O) n.setChannelId(CHANNEL_MISC);
-			Log.d(TAG, "Skip further process for non-conversation notification. ID: " + original_id);    // E.g. web login confirmation notification.
+			Log.d(TAG, "Skip further process for non-conversation notification: " + title);	// E.g. web login confirmation notification.
 			return;
 		}
 
 		// WeChat uses dynamic counter as notification ID, which will be reused by future conversations when cancelled by WeChat itself,
 		//   causing conversation notifications overwritten or duplicate.
-		evolving.setId(title.hashCode());		// Don't use the hash code of original title, which might have already evolved.
+		if (! isDistinctId(n, evolving.getPackageName(), original_id))
+			evolving.setId(title.hashCode());	// Don't use the hash code of original title, which might have already evolved.
 
 		extras.putBoolean(Notification.EXTRA_SHOW_WHEN, true);
 		if (BuildConfig.DEBUG) n.flags &= ~ Notification.FLAG_LOCAL_ONLY;
@@ -149,13 +151,32 @@ public class WeChatDecorator extends NevoDecoratorService {
 			n.flags |= Notification.FLAG_ONLY_ALERT_ONCE;		// No more alert for direct-replied notification.
 	}
 
+	private boolean isDistinctId(final Notification n, final String pkg, final int id) {
+		if (mDistinctIdSupported != null) {
+			if (mDistinctIdSupported) return true;
+			if (id > 4096 && id <= 4100) return false;		// If not in the legacy ID range, check version code again in case WeChat is upgraded.
+		}
+		int version = 0;
+		final ApplicationInfo app_info = n.extras.getParcelable("android.appInfo");
+		if (app_info != null) try {
+			if (pkg.equals(app_info.packageName))	// This will be Nevolution for active evolved notifications.
+				//noinspection JavaReflectionMemberAccess
+				version = (int) ApplicationInfo.class.getField("versionCode").get(app_info);
+		} catch (final IllegalAccessException | NoSuchFieldException | ClassCastException ignored) {}    // Fall-through
+		if (version == 0) try {
+			version = getPackageManager().getPackageInfo(pkg, 0).versionCode;
+		} catch (final PackageManager.NameNotFoundException ignored) {}
+		return version != 0 && (mDistinctIdSupported = version >= 1340);	// Distinct ID is supported since WeChat 6.7.3.
+	}
+	private Boolean mDistinctIdSupported;
+
 	// [Direct message with 1 unread]	Ticker: "Oasis: Hello",		Title: "Oasis",	Content: "Hello"
 	// [Direct message with >1 unread]	Ticker: "Oasis: Hello",		Title: "Oasis",	Content: "[2]Oasis: Hello"
 	// [Service message with 1 unread]	Ticker: "FedEx: Delivered",	Title: "FedEx",	Content: "[Link] Delivered"
 	// [Group chat with 1 unread]		Ticker: "Oasis: Hello",		Title: "Group",	Content: "Oasis: Hello"
 	// [Group chat with >1 unread]		Ticker: "Oasis: [Link] Mm",	Title: "Group",	Content: "[2]Oasis: [Link] Mm"
 	private static boolean isGroupChat(final CharSequence ticker_text, final String title, final CharSequence content_text) {
-		if (ticker_text == null || content_text == null) return false;
+		if (content_text == null) return false;
 		final String ticker = ticker_text.toString();    // Ticker text always starts with sender (same as title for direct message, but not for group chat).
 		final String content = content_text.toString();    // Content text includes sender for group and service messages, but not for direct messages.
 		final int pos = content.indexOf(ticker.substring(0, Math.min(10, ticker.length())));    // Seek for the first 10 chars of ticker in content.
