@@ -5,7 +5,7 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.2.0-rc02'
+        classpath 'com.android.tools.build:gradle:3.2.0'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
@@ -25,6 +25,7 @@ android {
     defaultConfig {
         minSdkVersion 23
         targetSdkVersion 27
+        resConfigs "en", "zh"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -37,7 +38,7 @@ android {
 
 dependencies {
     implementation 'com.oasisfeng.nevo:sdk:1.1.1'
-    implementation 'androidx.core:core:1.0.0-rc02'
+    implementation 'androidx.core:core:1.0.0'
 
     androidTestImplementation 'androidx.test:runner:1.1.0-alpha4'
 }
