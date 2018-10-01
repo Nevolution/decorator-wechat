@@ -221,16 +221,16 @@ public class MessagingBuilder {
 		final PendingIntent reply_action = proxy_intent.getParcelableExtra(EXTRA_REPLY_ACTION);
 		final String result_key = proxy_intent.getStringExtra(EXTRA_RESULT_KEY);
 		final Uri data = proxy_intent.getData();
-		if (data == null || reply_action == null || result_key == null) return;        // Should never happen
-		final String key = data.getSchemeSpecificPart(), original_key = proxy_intent.getStringExtra(EXTRA_ORIGINAL_KEY);
+		final Bundle input = RemoteInput.getResultsFromIntent(proxy_intent);
+		final CharSequence text = input != null ? input.getCharSequence(result_key) : null;
+		if (data == null || reply_action == null || result_key == null || text == null) return;	// Should never happen
 		final ArrayList<CharSequence> input_history = SDK_INT >= N ? proxy_intent.getCharSequenceArrayListExtra(EXTRA_REMOTE_INPUT_HISTORY) : null;
+		final String key = data.getSchemeSpecificPart(), original_key = proxy_intent.getStringExtra(EXTRA_ORIGINAL_KEY);
 		try {
 			final Intent input_data = addTargetPackageAndWakeUp(reply_action);
 			input_data.setClipData(proxy_intent.getClipData());
+
 			reply_action.send(mContext, 0, input_data, (pendingIntent, intent, _result_code, _result_data, _result_extras) -> {
-				final Bundle input = RemoteInput.getResultsFromIntent(input_data);
-				if (input == null) return;
-				final CharSequence text = input.getCharSequence(result_key);
 				if (BuildConfig.DEBUG) Log.d(TAG, "Reply sent: " + intent.toUri(0));
 				if (SDK_INT >= N) {
 					final Bundle addition = new Bundle();
