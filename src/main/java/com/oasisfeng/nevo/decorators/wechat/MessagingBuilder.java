@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat.MessagingStyle;
 import androidx.core.app.Person;
@@ -224,7 +225,7 @@ public class MessagingBuilder {
 		final String key = data.getSchemeSpecificPart(), original_key = proxy_intent.getStringExtra(EXTRA_ORIGINAL_KEY);
 		final ArrayList<CharSequence> input_history = SDK_INT >= N ? proxy_intent.getCharSequenceArrayListExtra(EXTRA_REMOTE_INPUT_HISTORY) : null;
 		try {
-			final Intent input_data = new Intent().setPackage(reply_action.getCreatorPackage());    // Ensure it works even if WeChat is background-restricted.
+			final Intent input_data = addTargetPackageAndWakeUp(reply_action);
 			input_data.setClipData(proxy_intent.getClipData());
 			reply_action.send(mContext, 0, input_data, (pendingIntent, intent, _result_code, _result_data, _result_extras) -> {
 				final Bundle input = RemoteInput.getResultsFromIntent(input_data);
@@ -254,10 +255,15 @@ public class MessagingBuilder {
 		final PendingIntent action = mMarkReadPendingIntents.remove(key);
 		if (action == null) return;
 		try {
-			action.send(mContext, 0, new Intent().setPackage(action.getCreatorPackage()));	// Ensure it works even if WeChat is background-restricted.
+			action.send(mContext, 0, addTargetPackageAndWakeUp(action));
 		} catch (final PendingIntent.CanceledException e) {
 			Log.w(TAG, "Mark-read action is already cancelled: " + key);
 		}
+	}
+
+	/** Ensure the PendingIntent works even if WeChat is stopped or background-restricted. */
+	@NonNull private static Intent addTargetPackageAndWakeUp(final PendingIntent action) {
+		return new Intent().addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES).setPackage(action.getCreatorPackage());
 	}
 
 	interface Controller { void recastNotification(String key, Bundle addition); }
