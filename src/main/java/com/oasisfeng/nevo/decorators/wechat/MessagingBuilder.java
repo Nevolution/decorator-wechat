@@ -29,7 +29,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat.MessagingStyle;
 import androidx.core.app.Person;
-import androidx.core.graphics.drawable.IconCompat;
 
 import static android.app.Notification.EXTRA_REMOTE_INPUT_HISTORY;
 import static android.app.PendingIntent.FLAG_UPDATE_CURRENT;
@@ -116,7 +115,7 @@ public class MessagingBuilder {
 		final MessagingStyle messaging = new MessagingStyle(mSelf);
 		final boolean sender_inline = num_lines_with_colon == lines.size();
 		for (int i = 0, size = lines.size(); i < size; i++)			// All lines have colon in text
-			messaging.addMessage(buildMessage(n, lines.keyAt(i), title, lines.valueAt(i), sender_inline ? null : title, group_chat));
+			messaging.addMessage(buildMessage(lines.keyAt(i), title, lines.valueAt(i), sender_inline ? null : title, group_chat));
 		return messaging;
 	}
 
@@ -136,7 +135,7 @@ public class MessagingBuilder {
 		}
 		final MessagingStyle messaging = new MessagingStyle(mSelf);
 		if (parcelable_messages.length == 0) {		// When only one message in this conversation
-			messaging.addMessage(buildMessage(n, n.when, title, n.extras.getCharSequence(Notification.EXTRA_TEXT), null, group_chat));
+			messaging.addMessage(buildMessage(n.when, title, n.extras.getCharSequence(Notification.EXTRA_TEXT), null, group_chat));
 		} else for (final Parcelable parcelable_message : parcelable_messages) {
 			if (! (parcelable_message instanceof Bundle)) return null;
 			final Bundle message = (Bundle) parcelable_message;
@@ -144,7 +143,7 @@ public class MessagingBuilder {
 			if (text == null) continue;
 			final long timestamp = message.getLong(KEY_TIMESTAMP);
 			final CharSequence author = message.getString(KEY_AUTHOR);		// Apparently always null (not yet implemented by WeChat)
-			messaging.addMessage(buildMessage(n, timestamp, title, text, author, group_chat));
+			messaging.addMessage(buildMessage(timestamp, title, text, author, group_chat));
 		}
 
 		final PendingIntent on_read = conversation.getParcelable(KEY_ON_READ);
@@ -171,8 +170,8 @@ public class MessagingBuilder {
 		return messaging;
 	}
 
-	private MessagingStyle.Message buildMessage(final Notification n, final long when, final CharSequence title, final CharSequence text,
-												@Nullable CharSequence sender, final boolean group_chat) {
+	private static MessagingStyle.Message buildMessage(final long when, final CharSequence title, final CharSequence text,
+													   @Nullable CharSequence sender, final boolean group_chat) {
 		CharSequence display_text = text;
 		if (sender == null) {
 			final int pos_colon = display_text.toString().indexOf(SENDER_MESSAGE_SEPARATOR);
@@ -183,8 +182,7 @@ public class MessagingBuilder {
 			} else sender = title;
 		}
 
-		final Person person = group_chat ? (sender != null ? new Person.Builder().setName(sender).build() : null) : SDK_INT < P ? SENDER_PLACEHOLDER
-				: new Person.Builder().setName(sender).setIcon(IconCompat.createFromIcon(mContext, n.getLargeIcon())).build();
+		final Person person = group_chat ? (sender != null ? new Person.Builder().setName(sender).build() : null) : SENDER_PLACEHOLDER;
 		return new MessagingStyle.Message(EmojiTranslator.translate(display_text), when, person);
 	}
 
