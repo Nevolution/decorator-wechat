@@ -42,6 +42,7 @@ import androidx.annotation.RequiresApi;
 import androidx.annotation.StringRes;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationCompat.MessagingStyle;
+import androidx.core.app.NotificationCompat.MessagingStyle.Message;
 
 import static android.Manifest.permission.READ_EXTERNAL_STORAGE;
 import static android.app.Notification.EXTRA_TITLE;
@@ -67,6 +68,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private static final String CHANNEL_MESSAGE = "message";
 	private static final String CHANNEL_GROUP_CONVERSATION = "group";
 	private static final String CHANNEL_MISC = "misc";
+	private static final String SOURCE_CHANNEL_REMINDER = "reminder_channel_id";
 
 	private static final @ColorInt int PRIMARY_COLOR = 0xFF33B332;
 	private static final @ColorInt int LIGHT_COLOR = 0xFF00FF00;
@@ -88,14 +90,14 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 		n.color = PRIMARY_COLOR;        // Tint the small icon
 
-		if (n.tickerText == null) {
+		if (SDK_INT >= O && SOURCE_CHANNEL_REMINDER.equals(n.getChannelId()) || n.tickerText == null) {
 			if (SDK_INT >= O) n.setChannelId(CHANNEL_MISC);
 			Log.d(TAG, "Skip further process for non-conversation notification: " + title);	// E.g. web login confirmation notification.
 			return;
 		}
 
-		// WeChat uses dynamic counter as notification ID, which will be reused by future conversations when cancelled by WeChat itself,
-		//   causing conversation notifications overwritten or duplicate.
+		// WeChat previously uses dynamic counter starting from 4097 as notification ID, which is reused after cancelled by WeChat itself,
+		//   causing conversation duplicate or overwritten notifications.
 		if (! isDistinctId(n, evolving.getPackageName(), original_id))
 			evolving.setId(title.hashCode());	// Don't use the hash code of original title, which might have already evolved.
 
@@ -111,11 +113,12 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (messaging == null)	// EXTRA_TEXT will be written in buildFromArchive()
 			messaging = mMessagingBuilder.buildFromArchive(n, title, group_chat, getArchivedNotifications(evolving.getOriginalKey(), MAX_NUM_ARCHIVED));
 		if (messaging == null) return;
+
 		if (group_chat) messaging.setGroupConversation(true).setConversationTitle(title);
 
-		final List<NotificationCompat.MessagingStyle.Message> messages = messaging.getMessages();
+		final List<Message> messages = messaging.getMessages();
 		if (messages.isEmpty()) return;
-		final NotificationCompat.MessagingStyle.Message last_message = messages.get(messages.size() - 1);
+		final Message last_message = messages.get(messages.size() - 1);
 		File image = null;
 		if (WeChatImageLoader.isImagePlaceholder(this, last_message.getText().toString())) {
 			if (checkSelfPermission(READ_EXTERNAL_STORAGE) == PERMISSION_GRANTED) {
