@@ -28,9 +28,11 @@ import java.util.Map;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat.MessagingStyle;
+import androidx.core.app.NotificationCompat.MessagingStyle.Message;
 import androidx.core.app.Person;
 
 import static android.app.Notification.EXTRA_REMOTE_INPUT_HISTORY;
+import static android.app.Notification.EXTRA_TEXT;
 import static android.app.PendingIntent.FLAG_UPDATE_CURRENT;
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.N;
@@ -85,7 +87,7 @@ public class MessagingBuilder {
 				Log.d(TAG, "Skip other conversation with the same key in archive: " + its_title);	// ID reset by WeChat due to notification removal in previous evolving
 				continue;
 			}
-			final CharSequence its_text = its_extras.getCharSequence(Notification.EXTRA_TEXT);
+			final CharSequence its_text = its_extras.getCharSequence(EXTRA_TEXT);
 			if (its_text == null) {
 				Log.w(TAG, "No text in archived notification.");
 				continue;
@@ -110,16 +112,16 @@ public class MessagingBuilder {
 			return null;
 		}
 
-		n.extras.putCharSequence(Notification.EXTRA_TEXT, text);	// Latest message text for collapsed layout.
+		n.extras.putCharSequence(EXTRA_TEXT, text);	// Latest message text for collapsed layout.
 
-		final MessagingStyle messaging = new MessagingStyle(mSelf);
+		final MessagingStyle messaging = new MessagingStyle(mPersons.getSelf().toPerson());
 		final boolean sender_inline = num_lines_with_colon == lines.size();
 		for (int i = 0, size = lines.size(); i < size; i++)			// All lines have colon in text
-			messaging.addMessage(buildMessage(lines.keyAt(i), title, lines.valueAt(i), sender_inline ? null : title, group_chat));
+			messaging.addMessage(buildMessage(lines.keyAt(i), n.tickerText, title, lines.valueAt(i), sender_inline ? null : title.toString(), group_chat));
 		return messaging;
 	}
 
-	@Nullable MessagingStyle buildFromExtender(final MutableStatusBarNotification sbn, final CharSequence title, final boolean group_chat) {
+	@Nullable MessagingStyle buildFromExtender(final MutableStatusBarNotification sbn, final CharSequence title, final boolean is_group) {
 		final MutableNotification n = sbn.getNotification();
 		final Bundle car_extender = n.extras.getBundle(EXTRA_CAR_EXTENDER);
 		if (car_extender == null) return null;
@@ -133,17 +135,20 @@ public class MessagingBuilder {
 			Log.w(TAG, KEY_MESSAGES + " is missing");
 			return null;
 		}
-		final MessagingStyle messaging = new MessagingStyle(mSelf);
+		final MessagingStyle messaging = new MessagingStyle(mPersons.getSelf().toPerson());
 		if (parcelable_messages.length == 0) {		// When only one message in this conversation
-			messaging.addMessage(buildMessage(n.when, title, n.extras.getCharSequence(Notification.EXTRA_TEXT), null, group_chat));
-		} else for (final Parcelable parcelable_message : parcelable_messages) {
-			if (! (parcelable_message instanceof Bundle)) return null;
-			final Bundle message = (Bundle) parcelable_message;
-			final String text = message.getString(KEY_TEXT);
+			final Message message = buildMessage(n.when, n.tickerText, title, n.extras.getCharSequence(EXTRA_TEXT), null, is_group);
+			messaging.addMessage(message);
+		} else for (int i = 0, num_messages = parcelable_messages.length; i < num_messages; i ++) {
+			final Parcelable parcelable = parcelable_messages[i];
+			if (! (parcelable instanceof Bundle)) return null;
+			final Bundle car_message = (Bundle) parcelable;
+			final String text = car_message.getString(KEY_TEXT);
 			if (text == null) continue;
-			final long timestamp = message.getLong(KEY_TIMESTAMP);
-			final CharSequence author = message.getString(KEY_AUTHOR);		// Apparently always null (not yet implemented by WeChat)
-			messaging.addMessage(buildMessage(timestamp, title, text, author, group_chat));
+			final long timestamp = car_message.getLong(KEY_TIMESTAMP);
+			final @Nullable String author = car_message.getString(KEY_AUTHOR);    // Apparently always null (not yet implemented by WeChat)
+			final Message message = buildMessage(timestamp, i == num_messages - 1 ? n.tickerText : null, title, text, author, is_group);
+			messaging.addMessage(message);
 		}
 
 		final PendingIntent on_read = conversation.getParcelable(KEY_ON_READ);
@@ -170,20 +175,27 @@ public class MessagingBuilder {
 		return messaging;
 	}
 
-	private static MessagingStyle.Message buildMessage(final long when, final CharSequence title, final CharSequence text,
-													   @Nullable CharSequence sender, final boolean group_chat) {
-		CharSequence display_text = text;
+	private Message buildMessage(final long when, final @Nullable CharSequence ticker, final CharSequence title,
+								 final CharSequence text, @Nullable String sender, final boolean group_chat) {
+		CharSequence actual_text = text;
 		if (sender == null) {
-			final int pos_colon = display_text.toString().indexOf(SENDER_MESSAGE_SEPARATOR);
-			if (pos_colon > 0) {
-				sender = EmojiTranslator.translate(display_text.subSequence(0, pos_colon));
-				display_text = display_text.subSequence(pos_colon + 2, display_text.length());
+			sender = extractSenderFromText(text);
+			if (sender != null) {
+				actual_text = text.subSequence(sender.length() + SENDER_MESSAGE_SEPARATOR.length(), text.length());
 				if (TextUtils.equals(title, sender)) sender = null;		// In this case, the actual sender is user itself.
-			} else sender = title;
+			}
 		}
+		actual_text = EmojiTranslator.translate(actual_text);
+		if (group_chat) {
+			final String ticker_sender = ticker != null ? extractSenderFromText(ticker) : null;	// Group nick is used in ticker while original nick in sender.
+			final Person person = sender != null ? mPersons.get(title.toString(), sender, ticker_sender != null ? ticker_sender : sender).toPerson() : null;
+			return new Message(actual_text, when, person);
+		} else return new Message(actual_text, when, SENDER_PLACEHOLDER);
+	}
 
-		final Person person = group_chat ? (sender != null ? new Person.Builder().setName(sender).build() : null) : SENDER_PLACEHOLDER;
-		return new MessagingStyle.Message(EmojiTranslator.translate(display_text), when, person);
+	private static @Nullable String extractSenderFromText(final CharSequence text) {
+		final int pos_colon = TextUtils.indexOf(text, SENDER_MESSAGE_SEPARATOR);
+		return pos_colon > 0 ? text.toString().substring(0, pos_colon) : null;
 	}
 
 	/** @return the extracted count in 0xFF range and start position in 0xFF00 range */
@@ -271,10 +283,7 @@ public class MessagingBuilder {
 	MessagingBuilder(final Context context, final Controller controller) {
 		mContext = context;
 		mController = controller;
-		final Person.Builder self = new Person.Builder().setName(context.getString(R.string.self_display_name));
-		// TODO: The following line is not working
-		//if (SDK_INT > O_MR1) self.setUri(ContactsContract.Profile.CONTENT_URI.toString());
-		mSelf = self.build();
+		mPersons = new Persons(context.getString(R.string.self_display_name));
 
 		final IntentFilter filter = new IntentFilter(ACTION_REPLY);
 		filter.addDataScheme(SCHEME_KEY);
@@ -287,7 +296,7 @@ public class MessagingBuilder {
 
 	private final Context mContext;
 	private final Controller mController;
-	private final Person mSelf;
+	private final Persons mPersons;
 	private final Map<String/* evolved key */, PendingIntent> mMarkReadPendingIntents = new ArrayMap<>();
 	private static final String TAG = WeChatDecorator.TAG;
 }
