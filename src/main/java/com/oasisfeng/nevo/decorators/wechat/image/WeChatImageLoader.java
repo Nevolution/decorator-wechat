@@ -1,4 +1,4 @@
-package com.oasisfeng.nevo.decorators.wechat;
+package com.oasisfeng.nevo.decorators.wechat.image;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -12,6 +12,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
+
+import com.oasisfeng.nevo.decorators.wechat.R;
 
 import java.io.File;
 import java.util.Arrays;
