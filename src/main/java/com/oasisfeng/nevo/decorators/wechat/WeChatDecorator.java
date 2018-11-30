@@ -27,6 +27,7 @@ import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.service.notification.StatusBarNotification;
 import android.util.Log;
 
 import com.oasisfeng.nevo.sdk.MutableNotification;
@@ -35,6 +36,7 @@ import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 
 import androidx.annotation.ColorInt;
@@ -43,9 +45,11 @@ import androidx.annotation.StringRes;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationCompat.MessagingStyle;
 import androidx.core.app.NotificationCompat.MessagingStyle.Message;
+import androidx.core.content.FileProvider;
 
 import static android.Manifest.permission.READ_EXTERNAL_STORAGE;
 import static android.app.Notification.EXTRA_TITLE;
+import static android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION;
 import static android.media.AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT;
@@ -62,6 +66,8 @@ import static android.service.notification.NotificationListenerService.REASON_CA
  * Created by Oasis on 2015/6/1.
  */
 public class WeChatDecorator extends NevoDecoratorService {
+
+	private static final String NEVO_PACKAGE_NAME = "com.oasisfeng.nevo";
 
 	private static final int MAX_NUM_ARCHIVED = 20;
 	private static final long GROUP_CHAT_SORT_KEY_SHIFT = 24 * 60 * 60 * 1000L;        // Sort group chat as one day older message.
@@ -124,7 +130,13 @@ public class WeChatDecorator extends NevoDecoratorService {
 			if (checkSelfPermission(READ_EXTERNAL_STORAGE) == PERMISSION_GRANTED) {
 				if (mImageLoader == null) mImageLoader = new WeChatImageLoader(this);
 				image = mImageLoader.loadImage();
-				if (image != null) last_message.setData("image/jpeg", Uri.fromFile(image));	// TODO: Keep image mapping for previous messages.
+				if (image != null) {
+					revokeUriPermission(mImageUriKey.get(evolving.getKey()) ,FLAG_GRANT_READ_URI_PERMISSION);
+					Uri imageUri = FileProvider.getUriForFile(this ,BuildConfig.APPLICATION_ID + ".file_export" ,image); // TODO: Keep image mapping for previous messages.
+					grantUriPermission(NEVO_PACKAGE_NAME ,imageUri ,FLAG_GRANT_READ_URI_PERMISSION);
+					last_message.setData("image/jpeg",imageUri);
+					mImageUriKey.put(evolving.getKey() ,imageUri);
+				}
 			} else n.addAction(new Notification.Action.Builder(null, getText(R.string.action_preview_image), WeChatImageLoader.buildPermissionRequest(this)).build());
 		}
 
@@ -196,6 +208,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 		} else if (SDK_INT < O || reason == REASON_CANCEL) {	// Exclude the removal request by us in above case. (Removal-Aware is only supported on Android 8+)
 			mMessagingBuilder.markRead(key);
 		}
+
+		revokeUriPermission(mImageUriKey.remove(key) ,FLAG_GRANT_READ_URI_PERMISSION);
 	}
 
 	@Override protected void onConnected() {
@@ -226,6 +240,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	private MessagingBuilder mMessagingBuilder;
 	private WeChatImageLoader mImageLoader;
+
+	private HashMap<String ,Uri> mImageUriKey = new HashMap<>();
 
 	static final String TAG = "Nevo.Decorator[WeChat]";
 }

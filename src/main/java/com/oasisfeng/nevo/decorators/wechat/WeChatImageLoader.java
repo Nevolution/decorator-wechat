@@ -30,8 +30,8 @@ import static android.app.PendingIntent.FLAG_UPDATE_CURRENT;
  */
 public class WeChatImageLoader {
 
+	public static final File WECHAT_PATH = new File(Environment.getExternalStorageDirectory(), "/Tencent/MicroMsg");
 	private static final long MAX_TIME_DIFF = 2_000;
-	private static final File WECHAT_PATH = new File(Environment.getExternalStorageDirectory(), "/Tencent/MicroMsg");
 
 	static boolean isImagePlaceholder(final Context context, final String text) {
 		if (sPlaceholders == null) sPlaceholders = Arrays.asList(context.getResources().getStringArray(R.array.text_placeholders_for_picture));

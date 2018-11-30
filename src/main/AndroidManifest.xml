@@ -39,6 +39,16 @@
 
         <activity android:name=".WeChatImageLoader$PermissionRequestActivity" android:theme="@android:style/Theme.Translucent.NoTitleBar" android:excludeFromRecents="true" />
 
+        <provider
+            android:authorities="${applicationId}.file_export"
+            android:exported="false"
+            android:name="androidx.core.content.FileProvider"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_export"/>
+        </provider>
+
     </application>
 
 </manifest>
