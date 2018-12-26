@@ -22,16 +22,16 @@ import android.app.NotificationManager;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.media.AudioAttributes;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.provider.Settings;
 import android.util.Log;
 
 import com.oasisfeng.nevo.sdk.MutableNotification;
 import com.oasisfeng.nevo.sdk.MutableStatusBarNotification;
 import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 import androidx.annotation.ColorInt;
@@ -59,13 +59,15 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private static final int MAX_NUM_ARCHIVED = 20;
 	private static final long GROUP_CHAT_SORT_KEY_SHIFT = 24 * 60 * 60 * 1000L;        // Sort group chat as one day older message.
 	private static final String CHANNEL_MESSAGE = "message";
-	private static final String CHANNEL_GROUP_CONVERSATION = "group";
+	private static final String CHANNEL_GROUP_CONVERSATION = "message_channel_group";	// Must start with "message_channel" to avoid being deleted by WeChat in Insider delivery mode
 	private static final String CHANNEL_MISC = "misc";
-	private static final String SOURCE_CHANNEL_REMINDER = "reminder_channel_id";
+	private static final String SOURCE_CHANNEL_MISC = "reminder_channel_id";			// Channel ID used by WeChat for misc. notifications
+	private static final String SOURCE_CHANNEL_DND = "message_dnd_mode_channel_id";		// Channel ID used by WeChat for its own DND mode
 
 	private static final @ColorInt int PRIMARY_COLOR = 0xFF33B332;
 	private static final @ColorInt int LIGHT_COLOR = 0xFF00FF00;
 	static final String SENDER_MESSAGE_SEPARATOR = ": ";
+	private static final String WECHAT_PACKAGE = "com.tencent.mm";
 
 	@Override public void apply(final MutableStatusBarNotification evolving) {
 		final MutableNotification n = evolving.getNotification();
@@ -83,8 +85,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 		n.color = PRIMARY_COLOR;        // Tint the small icon
 
-		if (SDK_INT >= O && SOURCE_CHANNEL_REMINDER.equals(n.getChannelId()) || n.tickerText == null) {
-			if (SDK_INT >= O) n.setChannelId(CHANNEL_MISC);
+		if (SDK_INT >= O && SOURCE_CHANNEL_MISC.equals(n.getChannelId()) || n.tickerText == null) {
+			if (SDK_INT >= O && n.getChannelId() == null) n.setChannelId(CHANNEL_MISC);
 			Log.d(TAG, "Skip further process for non-conversation notification: " + title);	// E.g. web login confirmation notification.
 			return;
 		}
@@ -100,7 +102,10 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final CharSequence content_text = extras.getCharSequence(Notification.EXTRA_TEXT);
 		final boolean group_chat = isGroupChat(n.tickerText, title.toString(), content_text);
 		n.setSortKey(String.valueOf(Long.MAX_VALUE - n.when + (group_chat ? GROUP_CHAT_SORT_KEY_SHIFT : 0)));    // Place group chat below other messages
-		if (SDK_INT >= O) n.setChannelId(group_chat ? CHANNEL_GROUP_CONVERSATION : CHANNEL_MESSAGE);
+		if (SDK_INT >= O) {
+			if (group_chat && ! SOURCE_CHANNEL_DND.equals(n.getChannelId())) n.setChannelId(CHANNEL_GROUP_CONVERSATION);
+			else if (n.getChannelId() == null) n.setChannelId(CHANNEL_MESSAGE);		// WeChat versions targeting O+ have its own channel for message
+		}
 
 		MessagingStyle messaging = mMessagingBuilder.buildFromExtender(evolving, title, group_chat);
 		if (messaging == null)	// EXTRA_TEXT will be written in buildFromArchive()
@@ -173,15 +178,29 @@ public class WeChatDecorator extends NevoDecoratorService {
 	}
 
 	@Override protected void onConnected() {
-		if (SDK_INT >= O) createNotificationChannels("com.tencent.mm", Arrays.asList(
-				makeChannel(CHANNEL_MESSAGE, R.string.channel_message),
-				makeChannel(CHANNEL_GROUP_CONVERSATION, R.string.channel_group_message),
-				makeChannel(CHANNEL_MISC, R.string.channel_misc)));
+		if (SDK_INT >= O) {
+			mWeChatTargetingO = isWeChatTargeting26OrAbove();
+			final List<NotificationChannel> channels = new ArrayList<>();
+			if (! mWeChatTargetingO) {		// WeChat versions targeting O+ have its own channels for message and misc
+				channels.add(makeChannel(CHANNEL_MESSAGE, R.string.channel_message));
+				channels.add(makeChannel(CHANNEL_MISC, R.string.channel_misc));
+			}
+			channels.add(makeChannel(CHANNEL_GROUP_CONVERSATION, R.string.channel_group_message));
+			createNotificationChannels(WECHAT_PACKAGE, channels);
+		}
+	}
+
+	private boolean isWeChatTargeting26OrAbove() {
+		try {
+			return getPackageManager().getApplicationInfo(WECHAT_PACKAGE, PackageManager.GET_UNINSTALLED_PACKAGES).targetSdkVersion >= O;
+		} catch (final PackageManager.NameNotFoundException e) {
+			return false;
+		}
 	}
 
 	@RequiresApi(O) private NotificationChannel makeChannel(final String channel_id, final @StringRes int name) {
 		final NotificationChannel channel = new NotificationChannel(channel_id, getString(name), NotificationManager.IMPORTANCE_HIGH/* Allow heads-up (by default) */);
-		channel.setSound(Uri.EMPTY,	// Default to none, due to sound being actually played by WeChat app itself (not via Notification).
+		channel.setSound(mWeChatTargetingO ? Settings.System.DEFAULT_NOTIFICATION_URI : null,	// Before targeting O, WeChat actually plays sound by itself (not via Notification).
 				new AudioAttributes.Builder().setUsage(USAGE_NOTIFICATION_COMMUNICATION_INSTANT).setContentType(CONTENT_TYPE_SONIFICATION).build());
 		channel.enableLights(true);
 		channel.setLightColor(LIGHT_COLOR);
@@ -199,6 +218,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	}
 
 	private MessagingBuilder mMessagingBuilder;
+	private boolean mWeChatTargetingO;
 
 	static final String TAG = "Nevo.Decorator[WeChat]";
 }

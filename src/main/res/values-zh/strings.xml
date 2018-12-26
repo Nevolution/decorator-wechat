@@ -27,7 +27,7 @@
     <string name="settings_experience_upgrade_text">需要安装 Android Auto 以支持“直接回复”等高级特性。</string>
     <string name="toast_image_preview_activated">图片预览将在此后收到的消息中展现</string>
 
-    <string name="channel_message">消息</string>
-    <string name="channel_group_message">群组消息</string>
-    <string name="channel_misc">其它</string>
+    <string name="channel_message">新消息通知</string>
+    <string name="channel_group_message">新群组消息通知</string>
+    <string name="channel_misc">其它通知</string>
 </resources>

@@ -27,7 +27,7 @@
     <string name="settings_experience_upgrade_text">Android Auto needs to be installed to support \"Direct Reply\" and other enhancements.</string>
     <string name="toast_image_preview_activated">Image preview will show up for future messages.</string>
 
-    <string name="channel_message">Messages</string>
-    <string name="channel_group_message">Group Conversations</string>
-    <string name="channel_misc">Miscellaneous</string>
+    <string name="channel_message">Message Notification</string>
+    <string name="channel_group_message">Group Conversation Notification</string>
+    <string name="channel_misc">Other Notification</string>
 </resources>
