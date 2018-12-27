@@ -159,8 +159,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 	// [Group chat with >1 unread]		Ticker: "Oasis: [Link] Mm",	Title: "Group",	Content: "[2]Oasis: [Link] Mm"
 	private static boolean isGroupChat(final CharSequence ticker_text, final String title, final CharSequence content_text) {
 		if (content_text == null) return false;
-		final String ticker = ticker_text.toString();    // Ticker text always starts with sender (same as title for direct message, but not for group chat).
-		final String content = content_text.toString();    // Content text includes sender for group and service messages, but not for direct messages.
+		final String ticker = ticker_text.toString().trim();	// Ticker text (may contain trailing spaces) always starts with sender (same as title for direct message, but not for group chat).
+		final String content = content_text.toString();			// Content text includes sender for group and service messages, but not for direct messages.
 		final int pos = content.indexOf(ticker.substring(0, Math.min(10, ticker.length())));    // Seek for the first 10 chars of ticker in content.
 		if (pos >= 0 && pos <= 6) {        // Max length (up to 999 unread): [999t]
 			final String message = pos > 0 && content.charAt(0) == '[' ? content.substring(pos) : content;    // Content without unread count prefix
