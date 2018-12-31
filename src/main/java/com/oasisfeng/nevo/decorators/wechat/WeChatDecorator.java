@@ -22,9 +22,11 @@ import android.app.NotificationManager;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.media.AudioAttributes;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.provider.Settings;
+import android.support.annotation.Nullable;
 import android.util.Log;
 
 import com.oasisfeng.nevo.sdk.MutableNotification;
@@ -33,6 +35,7 @@ import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import androidx.annotation.ColorInt;
 import androidx.annotation.RequiresApi;
@@ -57,12 +60,13 @@ import static android.service.notification.NotificationListenerService.REASON_CA
 public class WeChatDecorator extends NevoDecoratorService {
 
 	private static final int MAX_NUM_ARCHIVED = 20;
-	private static final long GROUP_CHAT_SORT_KEY_SHIFT = 24 * 60 * 60 * 1000L;        // Sort group chat as one day older message.
-	private static final String CHANNEL_MESSAGE = "message";
-	private static final String CHANNEL_GROUP_CONVERSATION = "message_channel_group";	// Must start with "message_channel" to avoid being deleted by WeChat in Insider delivery mode
-	private static final String CHANNEL_MISC = "misc";
-	private static final String SOURCE_CHANNEL_MISC = "reminder_channel_id";			// Channel ID used by WeChat for misc. notifications
-	private static final String SOURCE_CHANNEL_DND = "message_dnd_mode_channel_id";		// Channel ID used by WeChat for its own DND mode
+	private static final long GROUP_CHAT_SORT_KEY_SHIFT = 24 * 60 * 60 * 1000L;			// Sort group chat like one day older message.
+	private static final String CHANNEL_MESSAGE = "message_channel_new_id";				// Channel ID used by WeChat for all message notifications
+	private static final String OLD_CHANNEL_MESSAGE = "message";						//   old name for migration
+	private static final String CHANNEL_MISC = "reminder_channel_id";					// Channel ID used by WeChat for misc. notifications
+	private static final String OLD_CHANNEL_MISC = "misc";								//   old name for migration
+	private static final String CHANNEL_DND = "message_dnd_mode_channel_id";			// Channel ID used by WeChat for its own DND mode
+	private static final String CHANNEL_GROUP_CONVERSATION = "group";					// WeChat has no separate group for group conversation
 
 	private static final @ColorInt int PRIMARY_COLOR = 0xFF33B332;
 	private static final @ColorInt int LIGHT_COLOR = 0xFF00FF00;
@@ -85,15 +89,17 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 		n.color = PRIMARY_COLOR;        // Tint the small icon
 
-		if (SDK_INT >= O && SOURCE_CHANNEL_MISC.equals(n.getChannelId()) || n.tickerText == null) {
-			if (SDK_INT >= O && n.getChannelId() == null) n.setChannelId(CHANNEL_MISC);
+		final String channel_id = SDK_INT >= O ? n.getChannelId() : null;
+		if (CHANNEL_MISC.equals(channel_id) || n.tickerText == null) {
+			if (SDK_INT >= O && channel_id == null) n.setChannelId(CHANNEL_MISC);
 			Log.d(TAG, "Skip further process for non-conversation notification: " + title);	// E.g. web login confirmation notification.
 			return;
 		}
 
 		// WeChat previously uses dynamic counter starting from 4097 as notification ID, which is reused after cancelled by WeChat itself,
 		//   causing conversation duplicate or overwritten notifications.
-		if (! isDistinctId(n, evolving.getPackageName(), original_id))
+		final String pkg = evolving.getPackageName();
+		if (! isDistinctId(n, pkg, original_id))
 			evolving.setId(title.hashCode());	// Don't use the hash code of original title, which might have already evolved.
 
 		extras.putBoolean(Notification.EXTRA_SHOW_WHEN, true);
@@ -103,7 +109,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final boolean group_chat = isGroupChat(n.tickerText, title.toString(), content_text);
 		n.setSortKey(String.valueOf(Long.MAX_VALUE - n.when + (group_chat ? GROUP_CHAT_SORT_KEY_SHIFT : 0)));    // Place group chat below other messages
 		if (SDK_INT >= O) {
-			if (group_chat && ! SOURCE_CHANNEL_DND.equals(n.getChannelId())) n.setChannelId(CHANNEL_GROUP_CONVERSATION);
+			if (group_chat && ! CHANNEL_DND.equals(n.getChannelId())) n.setChannelId(CHANNEL_GROUP_CONVERSATION);
 			else if (n.getChannelId() == null) n.setChannelId(CHANNEL_MESSAGE);		// WeChat versions targeting O+ have its own channel for message
 		}
 
@@ -181,13 +187,44 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (SDK_INT >= O) {
 			mWeChatTargetingO = isWeChatTargeting26OrAbove();
 			final List<NotificationChannel> channels = new ArrayList<>();
-			if (! mWeChatTargetingO) {		// WeChat versions targeting O+ have its own channels for message and misc
-				channels.add(makeChannel(CHANNEL_MESSAGE, R.string.channel_message));
-				channels.add(makeChannel(CHANNEL_MISC, R.string.channel_misc));
-			}
 			channels.add(makeChannel(CHANNEL_GROUP_CONVERSATION, R.string.channel_group_message));
+			// WeChat versions targeting O+ have its own channels for message and misc
+			channels.add(migrateChannel(OLD_CHANNEL_MESSAGE,	CHANNEL_MESSAGE,	R.string.channel_message));
+			channels.add(migrateChannel(OLD_CHANNEL_MISC,		CHANNEL_MISC,		R.string.channel_misc));
 			createNotificationChannels(WECHAT_PACKAGE, channels);
 		}
+	}
+
+	@RequiresApi(O) private NotificationChannel migrateChannel(final String old_id, final String new_id, final @StringRes int new_name) {
+		final NotificationChannel channel_message = getNotificationChannel(WECHAT_PACKAGE, old_id);
+		deleteNotificationChannel(WECHAT_PACKAGE, old_id);
+		if (channel_message != null) return cloneChannel(channel_message, new_id, new_name);
+		else return makeChannel(new_id, new_name);
+	}
+
+	@RequiresApi(O) private NotificationChannel makeChannel(final String channel_id, final @StringRes int name) {
+		final NotificationChannel channel = new NotificationChannel(channel_id, getString(name), NotificationManager.IMPORTANCE_HIGH/* Allow heads-up (by default) */);
+		channel.setSound(getDefaultSound(), new AudioAttributes.Builder().setUsage(USAGE_NOTIFICATION_COMMUNICATION_INSTANT).setContentType(CONTENT_TYPE_SONIFICATION).build());
+		channel.enableLights(true);
+		channel.setLightColor(LIGHT_COLOR);
+		return channel;
+	}
+
+	@RequiresApi(O) private NotificationChannel cloneChannel(final NotificationChannel channel, final String id, final int new_name) {
+		final NotificationChannel clone = new NotificationChannel(id, getString(new_name), channel.getImportance());
+		clone.setGroup(channel.getGroup());
+		clone.setDescription(channel.getDescription());
+		clone.setLockscreenVisibility(channel.getLockscreenVisibility());
+		clone.setSound(Optional.ofNullable(channel.getSound()).orElse(getDefaultSound()), channel.getAudioAttributes());
+		clone.setBypassDnd(channel.canBypassDnd());
+		clone.setLightColor(channel.getLightColor());
+		clone.setShowBadge(channel.canShowBadge());
+		clone.setVibrationPattern(channel.getVibrationPattern());
+		return clone;
+	}
+
+	@Nullable private Uri getDefaultSound() {	// Before targeting O, WeChat actually plays sound by itself (not via Notification).
+		return mWeChatTargetingO ? Settings.System.DEFAULT_NOTIFICATION_URI : null;
 	}
 
 	private boolean isWeChatTargeting26OrAbove() {
@@ -196,15 +233,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 		} catch (final PackageManager.NameNotFoundException e) {
 			return false;
 		}
-	}
-
-	@RequiresApi(O) private NotificationChannel makeChannel(final String channel_id, final @StringRes int name) {
-		final NotificationChannel channel = new NotificationChannel(channel_id, getString(name), NotificationManager.IMPORTANCE_HIGH/* Allow heads-up (by default) */);
-		channel.setSound(mWeChatTargetingO ? Settings.System.DEFAULT_NOTIFICATION_URI : null,	// Before targeting O, WeChat actually plays sound by itself (not via Notification).
-				new AudioAttributes.Builder().setUsage(USAGE_NOTIFICATION_COMMUNICATION_INSTANT).setContentType(CONTENT_TYPE_SONIFICATION).build());
-		channel.enableLights(true);
-		channel.setLightColor(LIGHT_COLOR);
-		return channel;
 	}
 
 	@Override public void onCreate() {

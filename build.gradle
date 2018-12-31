@@ -37,7 +37,7 @@ android {
 }
 
 dependencies {
-    implementation 'com.oasisfeng.nevo:sdk:1.1.1'
+    implementation 'com.oasisfeng.nevo:sdk:1.2.0'
     implementation 'androidx.core:core:1.0.0'
 
     androidTestImplementation 'androidx.test:runner:1.1.0-alpha4'
