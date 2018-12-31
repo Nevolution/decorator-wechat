@@ -15,7 +15,7 @@
   -->
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"
-          package="com.oasisfeng.nevo.decorators.wechat" android:versionCode="17000" android:versionName="1.7">
+          package="com.oasisfeng.nevo.decorators.wechat" android:versionCode="20000" android:versionName="2.0">
 
     <!-- <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" /> -->    <!-- WeChatPictureLoader -->
 
