@@ -24,6 +24,7 @@ import android.content.pm.PackageManager;
 import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.Parcelable;
 import android.provider.Settings;
 import android.support.annotation.Nullable;
@@ -51,6 +52,7 @@ import static android.os.Build.VERSION_CODES.N;
 import static android.os.Build.VERSION_CODES.O;
 import static android.service.notification.NotificationListenerService.REASON_APP_CANCEL;
 import static android.service.notification.NotificationListenerService.REASON_CANCEL;
+import static android.service.notification.NotificationListenerService.REASON_CHANNEL_BANNED;
 
 /**
  * Bring state-of-art notification experience to WeChat.
@@ -72,6 +74,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private static final @ColorInt int LIGHT_COLOR = 0xFF00FF00;
 	static final String SENDER_MESSAGE_SEPARATOR = ": ";
 	private static final String WECHAT_PACKAGE = "com.tencent.mm";
+	private static final String KEY_SILENT_REVIVAL = "nevo.wechat.revival";
 
 	@Override public void apply(final MutableStatusBarNotification evolving) {
 		final MutableNotification n = evolving.getNotification();
@@ -109,8 +112,12 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final boolean group_chat = isGroupChat(n.tickerText, title.toString(), content_text);
 		n.setSortKey(String.valueOf(Long.MAX_VALUE - n.when + (group_chat ? GROUP_CHAT_SORT_KEY_SHIFT : 0)));    // Place group chat below other messages
 		if (SDK_INT >= O) {
-			if (group_chat && ! CHANNEL_DND.equals(n.getChannelId())) n.setChannelId(CHANNEL_GROUP_CONVERSATION);
-			else if (n.getChannelId() == null) n.setChannelId(CHANNEL_MESSAGE);		// WeChat versions targeting O+ have its own channel for message
+			if (extras.containsKey(KEY_SILENT_REVIVAL)) {
+				n.setGroup("nevo.group.auto");	// Special group name to let Nevolution auto-group it as if not yet grouped. (To be standardized in SDK)
+				n.setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY);		// This trick makes notification silent
+			}
+			if (group_chat && ! CHANNEL_DND.equals(channel_id)) n.setChannelId(CHANNEL_GROUP_CONVERSATION);
+			else if (channel_id == null) n.setChannelId(CHANNEL_MESSAGE);		// WeChat versions targeting O+ have its own channel for message
 		}
 
 		MessagingStyle messaging = mMessagingBuilder.buildFromExtender(evolving, title, group_chat);
@@ -178,9 +185,18 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (reason == REASON_APP_CANCEL) {		// Only if "Removal-Aware" of Nevolution is activated
 			Log.d(TAG, "Cancel notification: " + key);
 			cancelNotification(key);	// Will cancel all notifications evolved from this original key, thus trigger the "else" branch below
+		} else if (reason == REASON_CHANNEL_BANNED) {	// In case WeChat deleted our notification channel for group conversation in Insider delivery mode
+			mHandler.post(() -> reviveNotificationAfterChannelDeletion(key));
 		} else if (SDK_INT < O || reason == REASON_CANCEL) {	// Exclude the removal request by us in above case. (Removal-Aware is only supported on Android 8+)
 			mMessagingBuilder.markRead(key);
 		}
+	}
+
+	private void reviveNotificationAfterChannelDeletion(final String key) {
+		Log.d(TAG, ("Revive silently: ") + key);
+		final Bundle addition = new Bundle();
+		addition.putBoolean(KEY_SILENT_REVIVAL, true);
+		recastNotification(key, addition);
 	}
 
 	@Override protected void onConnected() {
@@ -247,6 +263,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	private MessagingBuilder mMessagingBuilder;
 	private boolean mWeChatTargetingO;
+	private final Handler mHandler = new Handler();
 
 	static final String TAG = "Nevo.Decorator[WeChat]";
 }
