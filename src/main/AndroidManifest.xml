@@ -18,7 +18,7 @@
           package="com.oasisfeng.nevo.decorators.wechat" android:versionCode="17000" android:versionName="1.7">
 
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" /> <!-- To install dummy apk on devices without Google Play Store -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />    <!-- WeChatPictureLoader -->
+    <!-- <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" /> -->    <!-- WeChatPictureLoader -->
 
     <application android:label="@string/decorator_wechat_label" android:allowBackup="true" android:icon="@mipmap/ic_launcher"
                  android:directBootAware="true" tools:targetApi="N" tools:ignore="GoogleAppIndexingWarning">
@@ -37,10 +37,10 @@
 
         <receiver android:name=".WeChatDecoratorSettingsReceiver" android:permission="com.oasisfeng.nevo.permission.BIND_DECORATOR_SERVICE" android:exported="true" />
 
+        <!--
         <service android:name=".image.WeChatImagePreviewDecorator"
                  android:permission="com.oasisfeng.nevo.permission.BIND_DECORATOR_SERVICE"
-                 android:label="WeChat Image Preview"
-                 android:description="Preview image inside messaging notification">
+                 android:label="WeChat Image Preview">
             <intent-filter android:priority="7">
                 <action android:name="com.oasisfeng.nevo.Decorator" />
             </intent-filter>
@@ -48,6 +48,7 @@
         </service>
 
         <activity android:name=".image.WeChatImageLoader$PermissionRequestActivity" android:theme="@android:style/Theme.Translucent.NoTitleBar" android:excludeFromRecents="true" />
+        -->
 
     </application>
 
