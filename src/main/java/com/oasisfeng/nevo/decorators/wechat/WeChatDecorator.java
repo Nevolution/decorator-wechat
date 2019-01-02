@@ -45,8 +45,6 @@ import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationCompat.MessagingStyle;
 
 import static android.app.Notification.EXTRA_TITLE;
-import static android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION;
-import static android.media.AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT;
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.N;
 import static android.os.Build.VERSION_CODES.O;
@@ -203,24 +201,26 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (SDK_INT >= O) {
 			mWeChatTargetingO = isWeChatTargeting26OrAbove();
 			final List<NotificationChannel> channels = new ArrayList<>();
-			channels.add(makeChannel(CHANNEL_GROUP_CONVERSATION, R.string.channel_group_message));
+			channels.add(makeChannel(CHANNEL_GROUP_CONVERSATION, R.string.channel_group_message, false));
 			// WeChat versions targeting O+ have its own channels for message and misc
-			channels.add(migrateChannel(OLD_CHANNEL_MESSAGE,	CHANNEL_MESSAGE,	R.string.channel_message));
-			channels.add(migrateChannel(OLD_CHANNEL_MISC,		CHANNEL_MISC,		R.string.channel_misc));
+			channels.add(migrate(OLD_CHANNEL_MESSAGE,	CHANNEL_MESSAGE,	R.string.channel_message, false));
+			channels.add(migrate(OLD_CHANNEL_MISC,		CHANNEL_MISC,		R.string.channel_misc, true));
 			createNotificationChannels(WECHAT_PACKAGE, channels);
 		}
 	}
 
-	@RequiresApi(O) private NotificationChannel migrateChannel(final String old_id, final String new_id, final @StringRes int new_name) {
+	@RequiresApi(O) private NotificationChannel migrate(final String old_id, final String new_id, final @StringRes int new_name, final boolean silent) {
 		final NotificationChannel channel_message = getNotificationChannel(WECHAT_PACKAGE, old_id);
 		deleteNotificationChannel(WECHAT_PACKAGE, old_id);
 		if (channel_message != null) return cloneChannel(channel_message, new_id, new_name);
-		else return makeChannel(new_id, new_name);
+		else return makeChannel(new_id, new_name, silent);
 	}
 
-	@RequiresApi(O) private NotificationChannel makeChannel(final String channel_id, final @StringRes int name) {
+	@RequiresApi(O) private NotificationChannel makeChannel(final String channel_id, final @StringRes int name, final boolean silent) {
 		final NotificationChannel channel = new NotificationChannel(channel_id, getString(name), NotificationManager.IMPORTANCE_HIGH/* Allow heads-up (by default) */);
-		channel.setSound(getDefaultSound(), new AudioAttributes.Builder().setUsage(USAGE_NOTIFICATION_COMMUNICATION_INSTANT).setContentType(CONTENT_TYPE_SONIFICATION).build());
+		if (silent) channel.setSound(null, null);
+		else channel.setSound(getDefaultSound(), new AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+				.setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT).build());
 		channel.enableLights(true);
 		channel.setLightColor(LIGHT_COLOR);
 		return channel;
