@@ -23,6 +23,7 @@
                  android:directBootAware="true" tools:targetApi="N" tools:ignore="GoogleAppIndexingWarning">
 
         <service android:name=".WeChatDecorator"
+                 android:directBootAware="true"
                  android:permission="com.oasisfeng.nevo.permission.BIND_DECORATOR_SERVICE"
                  android:process="com.oasisfeng.nevo.decorators"
                  android:label="@string/decorator_wechat_title"
@@ -34,7 +35,10 @@
             <meta-data android:name="settings.receiver" android:value="WeChatDecoratorSettingsReceiver" />
         </service>
 
-        <receiver android:name=".WeChatDecoratorSettingsReceiver" android:permission="com.oasisfeng.nevo.permission.BIND_DECORATOR_SERVICE" android:exported="true" />
+        <receiver android:name=".WeChatDecoratorSettingsReceiver"
+                  android:directBootAware="true"
+                  android:permission="com.oasisfeng.nevo.permission.BIND_DECORATOR_SERVICE"
+                  android:exported="true" />
 
         <!--
         <service android:name=".image.WeChatImagePreviewDecorator"
