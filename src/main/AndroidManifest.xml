@@ -40,19 +40,6 @@
                   android:permission="com.oasisfeng.nevo.permission.BIND_DECORATOR_SERVICE"
                   android:exported="true" />
 
-        <!--
-        <service android:name=".image.WeChatImagePreviewDecorator"
-                 android:permission="com.oasisfeng.nevo.permission.BIND_DECORATOR_SERVICE"
-                 android:label="WeChat Image Preview">
-            <intent-filter android:priority="7">
-                <action android:name="com.oasisfeng.nevo.Decorator" />
-            </intent-filter>
-            <meta-data android:name="packages" android:value="com.tencent.mm" />
-        </service>
-
-        <activity android:name=".image.WeChatImageLoader$PermissionRequestActivity" android:theme="@android:style/Theme.Translucent.NoTitleBar" android:excludeFromRecents="true" />
-        -->
-
     </application>
 
 </manifest>
