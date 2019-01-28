@@ -1,0 +1,16 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <Preference
+        android:key="@string/pref_activate"
+        android:title="@string/pref_activate_title" />
+
+    <Preference
+        android:key="@string/pref_extension"
+        android:title="@string/pref_extension_title"
+        android:summary="@string/pref_extension_summary" />
+
+    <Preference
+        android:key="@string/pref_version"
+        android:title="@string/pref_version_title" />
+
+</PreferenceScreen>

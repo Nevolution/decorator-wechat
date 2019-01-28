@@ -27,7 +27,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Parcelable;
 import android.provider.Settings;
-import android.support.annotation.Nullable;
 import android.util.Log;
 
 import com.oasisfeng.nevo.sdk.MutableNotification;
@@ -39,6 +38,7 @@ import java.util.List;
 import java.util.Optional;
 
 import androidx.annotation.ColorInt;
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.StringRes;
 import androidx.core.app.NotificationCompat;
@@ -59,6 +59,7 @@ import static android.service.notification.NotificationListenerService.REASON_CH
  */
 public class WeChatDecorator extends NevoDecoratorService {
 
+	public static final String WECHAT_PACKAGE = "com.tencent.mm";
 	private static final int MAX_NUM_ARCHIVED = 20;
 	private static final long GROUP_CHAT_SORT_KEY_SHIFT = 24 * 60 * 60 * 1000L;			// Sort group chat like one day older message.
 	private static final String CHANNEL_MESSAGE = "message_channel_new_id";				// Channel ID used by WeChat for all message notifications
@@ -71,7 +72,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private static final @ColorInt int PRIMARY_COLOR = 0xFF33B332;
 	private static final @ColorInt int LIGHT_COLOR = 0xFF00FF00;
 	static final String SENDER_MESSAGE_SEPARATOR = ": ";
-	private static final String WECHAT_PACKAGE = "com.tencent.mm";
 	private static final String KEY_SILENT_REVIVAL = "nevo.wechat.revival";
 
 	@Override public void apply(final MutableStatusBarNotification evolving) {

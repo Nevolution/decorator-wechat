@@ -5,4 +5,7 @@
         <item>[相片]</item>  <!-- 繁體 -->
         <item>[Photo]</item> <!-- English -->
     </string-array>
+    <string name="pref_activate" translatable="false">activate</string>
+    <string name="pref_extension" translatable="false">extension</string>
+    <string name="pref_version" translatable="false">version</string>
 </resources>

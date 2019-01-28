@@ -23,11 +23,19 @@
     <string name="action_reply">Reply</string>
     <string name="action_preview_image">Preview Image</string>
 
-    <string name="settings_experience_upgrade_title">Upgrade the experience further</string>
-    <string name="settings_experience_upgrade_text">Android Auto needs to be installed to support \"Direct Reply\" and other enhancements.</string>
-    <string name="toast_image_preview_activated">Image preview will show up for future messages.</string>
-
     <string name="channel_message">Message Notification</string>
     <string name="channel_group_message">Group Conversation Notification</string>
     <string name="channel_misc">Other Notification</string>
+
+    <!-- Settings -->
+
+    <string name="pref_activate_title">Activate</string>
+    <string name="pref_activate_summary_wechat_not_installed">\"WeChat\" is not installed</string>
+    <string name="pref_activate_summary_nevo_not_installed">Nevolution is not installed yet</string>
+    <string name="pref_extension_title">Extension pack</string>
+    <string name="pref_extension_summary">Add more features (direct reply, swipe to mark read and etc)</string>
+    <string name="pref_extension_summary_auto">\"Android Auto\" is required to support more features (direct reply, swipe to mark read and etc).</string>
+    <string name="pref_activate_summary_already_activated">Already activated</string>
+    <string name="pref_extension_summary_installed">Installed</string>
+    <string name="pref_version_title">Version</string>
 </resources>

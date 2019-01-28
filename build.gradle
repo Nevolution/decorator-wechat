@@ -5,7 +5,7 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.2.1'
+        classpath 'com.android.tools.build:gradle:3.3.0'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
@@ -30,6 +30,10 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    aaptOptions {
+        noCompress "apk"
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
@@ -38,7 +42,7 @@ android {
 
 dependencies {
     implementation 'com.oasisfeng.nevo:sdk:1.2.0'
-    implementation 'androidx.core:core:1.0.0'
+    implementation 'androidx.core:core:1.0.1'
 
     androidTestImplementation 'androidx.test:runner:1.1.1'
 }
