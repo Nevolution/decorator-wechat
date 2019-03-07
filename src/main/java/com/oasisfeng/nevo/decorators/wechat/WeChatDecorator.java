@@ -26,6 +26,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Parcelable;
+import android.os.Process;
 import android.provider.Settings;
 import android.util.Log;
 
@@ -210,8 +211,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 	}
 
 	@RequiresApi(O) private NotificationChannel migrate(final String old_id, final String new_id, final @StringRes int new_name, final boolean silent) {
-		final NotificationChannel channel_message = getNotificationChannel(WECHAT_PACKAGE, old_id);
-		deleteNotificationChannel(WECHAT_PACKAGE, old_id);
+		final NotificationChannel channel_message = getNotificationChannel(WECHAT_PACKAGE, Process.myUserHandle(), old_id);
+		deleteNotificationChannel(WECHAT_PACKAGE, Process.myUserHandle(), old_id);
 		if (channel_message != null) return cloneChannel(channel_message, new_id, new_name);
 		else return makeChannel(new_id, new_name, silent);
 	}
