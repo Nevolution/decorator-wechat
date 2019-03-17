@@ -92,9 +92,14 @@ public class WeChatDecorator extends NevoDecoratorService {
 		n.color = PRIMARY_COLOR;        // Tint the small icon
 
 		final String channel_id = SDK_INT >= O ? n.getChannelId() : null;
-		if (CHANNEL_MISC.equals(channel_id) || n.tickerText == null) {
+		if (CHANNEL_MISC.equals(channel_id)) {	// Misc. notifications on Android 8+.
+			if (SDK_INT >= O && (n.flags & Notification.FLAG_ONGOING_EVENT) != 0) {
+				VoiceCall.tweakIfNeeded(this, n);
+			} else Log.d(TAG, "Skip further process for non-conversation notification: " + title);    // E.g. web login confirmation notification.
+			return;
+		} else if (n.tickerText == null) {		// Legacy misc. notifications.
 			if (SDK_INT >= O && channel_id == null) n.setChannelId(CHANNEL_MISC);
-			Log.d(TAG, "Skip further process for non-conversation notification: " + title);	// E.g. web login confirmation notification.
+			Log.d(TAG, "Skip further process for non-conversation notification: " + title);    // E.g. web login confirmation notification.
 			return;
 		}
 

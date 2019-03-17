@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string-array name="text_placeholders_for_picture">
-        <item>[图片]</item>  <!-- 简体 -->
-        <item>[相片]</item>  <!-- 繁體 -->
-        <item>[Photo]</item> <!-- English -->
+    <string-array name="text_prefix_for_voice_call">
+        <item>语音通话中</item>  <!-- 简体 -->
+        <item>語音通話中</item>  <!-- 繁體 -->
+        <item>Tap to continue as voice call in progress</item> <!-- English -->
     </string-array>
     <string name="pref_activate" translatable="false">activate</string>
     <string name="pref_extension" translatable="false">extension</string>

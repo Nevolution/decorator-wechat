@@ -34,6 +34,7 @@
             </intent-filter>
             <meta-data android:name="packages" android:value="com.tencent.mm" />
             <meta-data android:name="settings.receiver" android:value="WeChatDecoratorSettingsReceiver" />
+            <meta-data android:name="hint_include_sticky" android:value="true" />
         </service>
 
         <receiver android:name=".WeChatDecoratorSettingsReceiver"
