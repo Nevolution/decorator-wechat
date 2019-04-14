@@ -11,12 +11,14 @@ import android.content.IntentFilter;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.provider.ContactsContract;
 import android.service.notification.StatusBarNotification;
 import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.Log;
 import android.util.LongSparseArray;
 
+import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation;
 import com.oasisfeng.nevo.sdk.MutableNotification;
 import com.oasisfeng.nevo.sdk.MutableStatusBarNotification;
 
@@ -37,6 +39,7 @@ import static android.app.PendingIntent.FLAG_UPDATE_CURRENT;
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.N;
 import static android.os.Build.VERSION_CODES.P;
+import static com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation.TYPE_GROUP_CHAT;
 import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.SENDER_MESSAGE_SEPARATOR;
 
 /**
@@ -44,10 +47,9 @@ import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.SENDER_MESSAG
  *
  * Refactored by Oasis on 2018-8-9.
  */
-public class MessagingBuilder {
+class MessagingBuilder {
 
 	private static final int MAX_NUM_HISTORICAL_LINES = 10;
-	private static final Person SENDER_PLACEHOLDER = new Person.Builder().setName(" ").build();	// Cannot be empty string, or it will be treated as null.
 
 	private static final String ACTION_REPLY = "REPLY";
 	private static final String SCHEME_KEY = "key";
@@ -67,8 +69,9 @@ public class MessagingBuilder {
 	private static final String KEY_ON_READ = "on_read";
 	private static final String KEY_PARTICIPANTS = "participants";
 	private static final String KEY_TIMESTAMP = "timestamp";
+	private static final String KEY_USERNAME = "key_username";
 
-	@Nullable MessagingStyle buildFromArchive(final Notification n, final CharSequence title, final boolean group_chat, final List<StatusBarNotification> archive) {
+	@Nullable MessagingStyle buildFromArchive(final Conversation conversation, final Notification n, final CharSequence title, final List<StatusBarNotification> archive) {
 		// Chat history in big content view
 		if (archive.isEmpty()) {
 			Log.d(TAG, "No history");
@@ -114,30 +117,31 @@ public class MessagingBuilder {
 
 		n.extras.putCharSequence(EXTRA_TEXT, text);	// Latest message text for collapsed layout.
 
-		final MessagingStyle messaging = new MessagingStyle(mPersons.getSelf().toPerson());
+		final MessagingStyle messaging = new MessagingStyle(mUserSelf);
 		final boolean sender_inline = num_lines_with_colon == lines.size();
 		for (int i = 0, size = lines.size(); i < size; i++)			// All lines have colon in text
-			messaging.addMessage(buildMessage(lines.keyAt(i), n.tickerText, title, lines.valueAt(i), sender_inline ? null : title.toString(), group_chat));
+			messaging.addMessage(buildMessage(conversation, lines.keyAt(i), n.tickerText, lines.valueAt(i), sender_inline ? null : title.toString(), null));
 		return messaging;
 	}
 
-	@Nullable MessagingStyle buildFromExtender(final MutableStatusBarNotification sbn, final CharSequence title, final boolean is_group) {
+	@Nullable MessagingStyle buildFromExtender(final Conversation conversation, final MutableStatusBarNotification sbn) {
 		final MutableNotification n = sbn.getNotification();
 		final Bundle car_extender = n.extras.getBundle(EXTRA_CAR_EXTENDER);
 		if (car_extender == null) return null;
-		final Bundle conversation = car_extender.getBundle(EXTRA_CONVERSATION);
-		if (conversation == null) {
+		final Bundle convs = car_extender.getBundle(EXTRA_CONVERSATION);
+		if (convs == null) {
 			Log.w(TAG, EXTRA_CONVERSATION + " is missing");
 			return null;
 		}
-		final Parcelable[] parcelable_messages = conversation.getParcelableArray(KEY_MESSAGES);
+		final Parcelable[] parcelable_messages = convs.getParcelableArray(KEY_MESSAGES);
 		if (parcelable_messages == null) {
 			Log.w(TAG, KEY_MESSAGES + " is missing");
 			return null;
 		}
-		final MessagingStyle messaging = new MessagingStyle(mPersons.getSelf().toPerson());
+		final PendingIntent on_reply = convs.getParcelable(KEY_ON_REPLY);
+		final MessagingStyle messaging = new MessagingStyle(mUserSelf);
 		if (parcelable_messages.length == 0) {		// When only one message in this conversation
-			final Message message = buildMessage(n.when, n.tickerText, title, n.extras.getCharSequence(EXTRA_TEXT), null, is_group);
+			final Message message = buildMessage(conversation, n.when, n.tickerText, n.extras.getCharSequence(EXTRA_TEXT), null, on_reply);
 			messaging.addMessage(message);
 		} else for (int i = 0, num_messages = parcelable_messages.length; i < num_messages; i ++) {
 			final Parcelable parcelable = parcelable_messages[i];
@@ -147,20 +151,20 @@ public class MessagingBuilder {
 			if (text == null) continue;
 			final long timestamp = car_message.getLong(KEY_TIMESTAMP);
 			final @Nullable String author = car_message.getString(KEY_AUTHOR);    // Apparently always null (not yet implemented by WeChat)
-			final Message message = buildMessage(timestamp, i == num_messages - 1 ? n.tickerText : null, title, text, author, is_group);
+			final Message message = buildMessage(conversation, timestamp, i == num_messages - 1 ? n.tickerText : null, text, author, on_reply);
 			messaging.addMessage(message);
 		}
 
-		final PendingIntent on_read = conversation.getParcelable(KEY_ON_READ);
+		final PendingIntent on_read = convs.getParcelable(KEY_ON_READ);
 		if (on_read != null) mMarkReadPendingIntents.put(sbn.getKey(), on_read);	// Mapped by evolved key,
 
-		final PendingIntent on_reply; final RemoteInput remote_input;
-		if (SDK_INT >= N && (on_reply = conversation.getParcelable(KEY_ON_REPLY)) != null && (remote_input = conversation.getParcelable(KEY_REMOTE_INPUT)) != null) {
+		final RemoteInput remote_input;
+		if (SDK_INT >= N && on_reply != null && (remote_input = convs.getParcelable(KEY_REMOTE_INPUT)) != null) {
 			final CharSequence[] input_history = n.extras.getCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY);
 			final PendingIntent proxy = proxyDirectReply(sbn, on_reply, remote_input, input_history);
 			final RemoteInput.Builder tweaked = new RemoteInput.Builder(remote_input.getResultKey()).addExtras(remote_input.getExtras())
 					.setAllowFreeFormInput(true).setChoices(SmartReply.generateChoices(messaging));
-			final String[] participants = conversation.getStringArray(KEY_PARTICIPANTS);
+			final String[] participants = convs.getStringArray(KEY_PARTICIPANTS);
 			if (participants != null && participants.length > 0) {
 				final StringBuilder label = new StringBuilder();
 				for (final String participant : participants) label.append(',').append(participant);
@@ -175,22 +179,33 @@ public class MessagingBuilder {
 		return messaging;
 	}
 
-	private Message buildMessage(final long when, final @Nullable CharSequence ticker, final CharSequence title,
-								 final CharSequence text, @Nullable String sender, final boolean group_chat) {
+	private Message buildMessage(final Conversation conversation, final long when, final @Nullable CharSequence ticker,
+			final CharSequence text, @Nullable String sender, final @Nullable PendingIntent on_reply) {
 		CharSequence actual_text = text;
 		if (sender == null) {
 			sender = extractSenderFromText(text);
 			if (sender != null) {
 				actual_text = text.subSequence(sender.length() + SENDER_MESSAGE_SEPARATOR.length(), text.length());
-				if (TextUtils.equals(title, sender)) sender = null;		// In this case, the actual sender is user itself.
+				if (TextUtils.equals(conversation.getTitle(), sender)) sender = null;		// In this case, the actual sender is user itself.
 			}
 		}
 		actual_text = EmojiTranslator.translate(actual_text);
-		if (group_chat) {
+
+		if (conversation.key == null) try {
+			if (on_reply != null) on_reply.send(mContext, 0, null, (p, intent, r, d, b) -> {
+				conversation.key = intent.getStringExtra(KEY_USERNAME);		// setType() below will trigger rebuilding of conversation sender.
+				conversation.setType(conversation.key.endsWith("@chatroom") ? TYPE_GROUP_CHAT
+						: conversation.key.startsWith("gh_") ? Conversation.TYPE_BOT_MESSAGE : Conversation.TYPE_DIRECT_MESSAGE);
+			}, null);
+		} catch (final PendingIntent.CanceledException e) {
+			Log.e(TAG, "Error parsing reply intent.", e);
+		}
+
+		if (conversation.getType() == TYPE_GROUP_CHAT) {
 			final String ticker_sender = ticker != null ? extractSenderFromText(ticker) : null;	// Group nick is used in ticker while original nick in sender.
-			final Person person = sender != null ? mPersons.get(title.toString(), sender, ticker_sender != null ? ticker_sender : sender).toPerson() : null;
+			final Person person = sender == null ? null : conversation.getGroupParticipant(sender, ticker_sender != null ? ticker_sender : sender);
 			return new Message(actual_text, when, person);
-		} else return new Message(actual_text, when, SENDER_PLACEHOLDER);
+		} else return new Message(actual_text, when, conversation.sender);
 	}
 
 	private static @Nullable String extractSenderFromText(final CharSequence text) {
@@ -283,7 +298,8 @@ public class MessagingBuilder {
 	MessagingBuilder(final Context context, final Controller controller) {
 		mContext = context;
 		mController = controller;
-		mPersons = new Persons(context.getString(R.string.self_display_name));
+		final Uri profile_lookup = ContactsContract.Contacts.getLookupUri(context.getContentResolver(), ContactsContract.Profile.CONTENT_URI);
+		mUserSelf = new Person.Builder().setUri(profile_lookup != null ? profile_lookup.toString() : null).setName(context.getString(R.string.self_display_name)).build();
 
 		final IntentFilter filter = new IntentFilter(ACTION_REPLY);
 		filter.addDataScheme(SCHEME_KEY);
@@ -296,7 +312,7 @@ public class MessagingBuilder {
 
 	private final Context mContext;
 	private final Controller mController;
-	private final Persons mPersons;
+	private final Person mUserSelf;
 	private final Map<String/* evolved key */, PendingIntent> mMarkReadPendingIntents = new ArrayMap<>();
 	private static final String TAG = WeChatDecorator.TAG;
 }
