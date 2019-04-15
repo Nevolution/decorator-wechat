@@ -52,10 +52,12 @@ class MessagingBuilder {
 	private static final int MAX_NUM_HISTORICAL_LINES = 10;
 
 	private static final String ACTION_REPLY = "REPLY";
+	private static final String ACTION_MENTION = "MENTION";
 	private static final String SCHEME_KEY = "key";
 	private static final String EXTRA_REPLY_ACTION = "pending_intent";
 	private static final String EXTRA_RESULT_KEY = "result_key";
 	private static final String EXTRA_ORIGINAL_KEY = "original_key";
+	private static final String EXTRA_REPLY_PREFIX = "reply_prefix";
 
 	/* From Notification.CarExtender */
 	private static final String EXTRA_CAR_EXTENDER = "android.car.EXTENSIONS";
@@ -70,6 +72,7 @@ class MessagingBuilder {
 	private static final String KEY_PARTICIPANTS = "participants";
 	private static final String KEY_TIMESTAMP = "timestamp";
 	private static final String KEY_USERNAME = "key_username";
+	private static final String MENTION_SEPARATOR = " ";			// Separator between @nick and text. It's not a regular white space, but U+2005.
 
 	@Nullable MessagingStyle buildFromArchive(final Conversation conversation, final Notification n, final CharSequence title, final List<StatusBarNotification> archive) {
 		// Chat history in big content view
@@ -161,20 +164,30 @@ class MessagingBuilder {
 		final RemoteInput remote_input;
 		if (SDK_INT >= N && on_reply != null && (remote_input = convs.getParcelable(KEY_REMOTE_INPUT)) != null) {
 			final CharSequence[] input_history = n.extras.getCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY);
-			final PendingIntent proxy = proxyDirectReply(sbn, on_reply, remote_input, input_history);
-			final RemoteInput.Builder tweaked = new RemoteInput.Builder(remote_input.getResultKey()).addExtras(remote_input.getExtras())
+			final PendingIntent proxy = proxyDirectReply(sbn, on_reply, remote_input, input_history, null);
+			final RemoteInput.Builder reply_remote_input = new RemoteInput.Builder(remote_input.getResultKey()).addExtras(remote_input.getExtras())
 					.setAllowFreeFormInput(true).setChoices(SmartReply.generateChoices(messaging));
 			final String[] participants = convs.getStringArray(KEY_PARTICIPANTS);
 			if (participants != null && participants.length > 0) {
 				final StringBuilder label = new StringBuilder();
 				for (final String participant : participants) label.append(',').append(participant);
-				tweaked.setLabel(label.subSequence(1, label.length()));
-			} else tweaked.setLabel(remote_input.getResultKey());
+				reply_remote_input.setLabel(label.subSequence(1, label.length()));
+			} else reply_remote_input.setLabel(remote_input.getResultKey());
 
-			final Action.Builder action = new Action.Builder(null, mContext.getString(R.string.action_reply), proxy)
-					.addRemoteInput(tweaked.build()).setAllowGeneratedReplies(true);
-			if (SDK_INT >= P) action.setSemanticAction(Action.SEMANTIC_ACTION_REPLY);
-			n.addAction(action.build());
+			final Action.Builder reply_action = new Action.Builder(null, mContext.getString(R.string.action_reply), proxy)
+					.addRemoteInput(reply_remote_input.build()).setAllowGeneratedReplies(true);
+			if (SDK_INT >= P) reply_action.setSemanticAction(Action.SEMANTIC_ACTION_REPLY);
+			n.addAction(reply_action.build());
+
+			if (conversation.getType() == TYPE_GROUP_CHAT) {
+				final List<Message> messages = messaging.getMessages();
+				final Person last_sender = messages.get(messages.size() - 1).getPerson();
+				if (last_sender != null && last_sender != mUserSelf) {
+					final String label = "@" + last_sender.getName(), prefix = "@" + Conversation.getOriginalName(last_sender) + MENTION_SEPARATOR;
+					n.addAction(new Action.Builder(null, label, proxyDirectReply(sbn, on_reply, remote_input, input_history, prefix))
+							.addRemoteInput(reply_remote_input.setLabel(label).build()).setAllowGeneratedReplies(true).build());
+				}
+			}
 		}
 		return messaging;
 	}
@@ -193,9 +206,9 @@ class MessagingBuilder {
 
 		if (conversation.key == null) try {
 			if (on_reply != null) on_reply.send(mContext, 0, null, (p, intent, r, d, b) -> {
-				conversation.key = intent.getStringExtra(KEY_USERNAME);		// setType() below will trigger rebuilding of conversation sender.
-				conversation.setType(conversation.key.endsWith("@chatroom") ? TYPE_GROUP_CHAT
-						: conversation.key.startsWith("gh_") ? Conversation.TYPE_BOT_MESSAGE : Conversation.TYPE_DIRECT_MESSAGE);
+				final String key = conversation.key = intent.getStringExtra(KEY_USERNAME);	// setType() below will trigger rebuilding of conversation sender.
+				conversation.setType(key.endsWith("@chatroom") || key.endsWith("@im.chatroom"/* WeWork */) ? TYPE_GROUP_CHAT
+						: key.startsWith("gh_") ? Conversation.TYPE_BOT_MESSAGE : Conversation.TYPE_DIRECT_MESSAGE);
 			}, null);
 		} catch (final PendingIntent.CanceledException e) {
 			Log.e(TAG, "Error parsing reply intent.", e);
@@ -236,9 +249,11 @@ class MessagingBuilder {
 
 	/** Intercept the PendingIntent in RemoteInput to update the notification with replied message upon success. */
 	private PendingIntent proxyDirectReply(final MutableStatusBarNotification sbn, final PendingIntent on_reply, final RemoteInput remote_input,
-										   final @Nullable CharSequence[] input_history) {
-		final Intent proxy = new Intent(ACTION_REPLY).putExtra(EXTRA_REPLY_ACTION, on_reply).putExtra(EXTRA_RESULT_KEY, remote_input.getResultKey())
+										   final @Nullable CharSequence[] input_history, final @Nullable String mention_prefix) {
+		final Intent proxy = new Intent(mention_prefix != null ? ACTION_MENTION : ACTION_REPLY)		// Separate action to avoid PendingIntent overwrite.
+				.putExtra(EXTRA_REPLY_ACTION, on_reply).putExtra(EXTRA_RESULT_KEY, remote_input.getResultKey())
 				.setData(Uri.fromParts(SCHEME_KEY, sbn.getKey(), null)).putExtra(EXTRA_ORIGINAL_KEY, sbn.getOriginalKey());
+		if (mention_prefix != null) proxy.putExtra(EXTRA_REPLY_PREFIX, mention_prefix);
 		if (SDK_INT >= N && input_history != null)
 			proxy.putCharSequenceArrayListExtra(EXTRA_REMOTE_INPUT_HISTORY, new ArrayList<>(Arrays.asList(input_history)));
 		return PendingIntent.getBroadcast(mContext, 0, proxy.setPackage(mContext.getPackageName()), FLAG_UPDATE_CURRENT);
@@ -246,11 +261,16 @@ class MessagingBuilder {
 
 	private final BroadcastReceiver mReplyReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context context, final Intent proxy_intent) {
 		final PendingIntent reply_action = proxy_intent.getParcelableExtra(EXTRA_REPLY_ACTION);
-		final String result_key = proxy_intent.getStringExtra(EXTRA_RESULT_KEY);
-		final Uri data = proxy_intent.getData();
-		final Bundle input = RemoteInput.getResultsFromIntent(proxy_intent);
-		final CharSequence text = input != null ? input.getCharSequence(result_key) : null;
-		if (data == null || reply_action == null || result_key == null || text == null) return;	// Should never happen
+		final String result_key = proxy_intent.getStringExtra(EXTRA_RESULT_KEY), reply_prefix = proxy_intent.getStringExtra(EXTRA_REPLY_PREFIX);
+		final Uri data = proxy_intent.getData(); final Bundle results = RemoteInput.getResultsFromIntent(proxy_intent);
+		final CharSequence input = results != null ? results.getCharSequence(result_key) : null;
+		if (data == null || reply_action == null || result_key == null || input == null) return;	// Should never happen
+		final CharSequence text;
+		if (reply_prefix != null) {
+			text = reply_prefix + input;
+			results.putCharSequence(result_key, text);
+			RemoteInput.addResultsToIntent(new RemoteInput[]{ new RemoteInput.Builder(result_key).build() }, proxy_intent, results);
+		} else text = input;
 		final ArrayList<CharSequence> input_history = SDK_INT >= N ? proxy_intent.getCharSequenceArrayListExtra(EXTRA_REMOTE_INPUT_HISTORY) : null;
 		final String key = data.getSchemeSpecificPart(), original_key = proxy_intent.getStringExtra(EXTRA_ORIGINAL_KEY);
 		try {
@@ -301,8 +321,7 @@ class MessagingBuilder {
 		final Uri profile_lookup = ContactsContract.Contacts.getLookupUri(context.getContentResolver(), ContactsContract.Profile.CONTENT_URI);
 		mUserSelf = new Person.Builder().setUri(profile_lookup != null ? profile_lookup.toString() : null).setName(context.getString(R.string.self_display_name)).build();
 
-		final IntentFilter filter = new IntentFilter(ACTION_REPLY);
-		filter.addDataScheme(SCHEME_KEY);
+		final IntentFilter filter = new IntentFilter(ACTION_REPLY); filter.addAction(ACTION_MENTION); filter.addDataScheme(SCHEME_KEY);
 		context.registerReceiver(mReplyReceiver, filter);
 	}
 

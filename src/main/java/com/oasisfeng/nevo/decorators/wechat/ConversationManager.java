@@ -31,6 +31,8 @@ class ConversationManager {
 		static final int TYPE_BOT_MESSAGE = 3;
 		@IntDef({ TYPE_UNKNOWN, TYPE_DIRECT_MESSAGE, TYPE_GROUP_CHAT, TYPE_BOT_MESSAGE }) @Retention(RetentionPolicy.SOURCE) @interface ConversationType {}
 
+		private static final String SCHEME_ORIGINAL_NAME = "ON:";
+
 		final int id;
 		@Nullable String key;
 		Person sender = SENDER_PLACEHOLDER;
@@ -64,7 +66,10 @@ class ConversationManager {
 			return participant;
 		}
 
-		private static final String SCHEME_ORIGINAL_NAME = "ON:";
+		static CharSequence getOriginalName(final Person person) {
+			final String uri = person.getUri();
+			return uri != null && uri.startsWith(SCHEME_ORIGINAL_NAME) ? uri.substring(SCHEME_ORIGINAL_NAME.length()): person.getName();
+		}
 
 		Conversation(final int id) { this.id = id; }
 
