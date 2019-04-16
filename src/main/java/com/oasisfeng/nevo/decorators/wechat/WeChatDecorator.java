@@ -140,7 +140,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (messages.isEmpty()) return;
 
 		if (is_group_chat) messaging.setGroupConversation(true).setConversationTitle(title);
-		messaging.addCompatExtras(extras);
+		MessagingBuilder.flatIntoExtras(messaging, extras);
 		extras.putString(Notification.EXTRA_TEMPLATE, TEMPLATE_MESSAGING);
 
 		if (SDK_INT >= N && extras.getCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY) != null)

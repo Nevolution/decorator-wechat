@@ -1,5 +1,6 @@
 package com.oasisfeng.nevo.decorators.wechat;
 
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.Notification.Action;
 import android.app.NotificationManager;
@@ -32,6 +33,7 @@ import java.util.Map;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat.MessagingStyle;
 import androidx.core.app.NotificationCompat.MessagingStyle.Message;
 import androidx.core.app.Person;
@@ -44,6 +46,10 @@ import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.N;
 import static android.os.Build.VERSION_CODES.O;
 import static android.os.Build.VERSION_CODES.P;
+import static androidx.core.app.NotificationCompat.EXTRA_CONVERSATION_TITLE;
+import static androidx.core.app.NotificationCompat.EXTRA_IS_GROUP_CONVERSATION;
+import static androidx.core.app.NotificationCompat.EXTRA_MESSAGES;
+import static androidx.core.app.NotificationCompat.EXTRA_SELF_DISPLAY_NAME;
 import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.SENDER_MESSAGE_SEPARATOR;
 
 /**
@@ -76,6 +82,14 @@ class MessagingBuilder {
 	private static final String CAR_KEY_AUTHOR = "author";					// In the bundle of CAR_KEY_MESSAGES
 	private static final String CAR_KEY_TEXT = "text";
 	private static final String CAR_KEY_TIMESTAMP = "timestamp";
+
+	private static final String KEY_TEXT = "text";
+	private static final String KEY_TIMESTAMP = "time";
+	private static final String KEY_SENDER = "sender";
+	@RequiresApi(P) private static final String KEY_SENDER_PERSON = "sender_person";
+	private static final String KEY_DATA_MIME_TYPE = "type";
+	private static final String KEY_DATA_URI= "uri";
+	private static final String KEY_EXTRAS_BUNDLE = "extras";
 
 	private static final String KEY_USERNAME = "key_username";
 	private static final String MENTION_SEPARATOR = " ";			// Separator between @nick and text. It's not a regular white space, but U+2005.
@@ -333,6 +347,46 @@ class MessagingBuilder {
 	/** Ensure the PendingIntent works even if WeChat is stopped or background-restricted. */
 	@NonNull private static Intent addTargetPackageAndWakeUp(final PendingIntent action) {
 		return new Intent().addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES).setPackage(action.getCreatorPackage());
+	}
+
+	static void flatIntoExtras(final MessagingStyle messaging, final Bundle extras) {
+		final Person user = messaging.getUser();
+		if (user != null) {
+			extras.putCharSequence(EXTRA_SELF_DISPLAY_NAME, user.getName());
+			if (SDK_INT >= P) extras.putParcelable(Notification.EXTRA_MESSAGING_PERSON, toAndroidPerson(user));	// Not included in NotificationCompat
+		}
+		if (messaging.getConversationTitle() != null) extras.putCharSequence(EXTRA_CONVERSATION_TITLE, messaging.getConversationTitle());
+		final List<Message> messages = messaging.getMessages();
+		if (! messages.isEmpty()) extras.putParcelableArray(EXTRA_MESSAGES, getBundleArrayForMessages(messages));
+		//if (! mHistoricMessages.isEmpty()) extras.putParcelableArray(Notification.EXTRA_HISTORIC_MESSAGES, MessagingBuilder.getBundleArrayForMessages(mHistoricMessages));
+		extras.putBoolean(EXTRA_IS_GROUP_CONVERSATION, messaging.isGroupConversation());
+	}
+
+	private static Bundle[] getBundleArrayForMessages(final List<Message> messages) {
+		final int N = messages.size();
+		final Bundle[] bundles = new Bundle[N];
+		for (int i = 0; i < N; i ++) bundles[i] = toBundle(messages.get(i));
+		return bundles;
+	}
+
+	private static Bundle toBundle(final Message message) {
+		final Bundle bundle = new Bundle();
+		bundle.putCharSequence(KEY_TEXT, message.getText());
+		bundle.putLong(KEY_TIMESTAMP, message.getTimestamp());		// Must be included even for 0
+		final Person sender = message.getPerson();
+		if (sender != null) {
+			bundle.putCharSequence(KEY_SENDER, sender.getName());	// Legacy listeners need this
+			if (SDK_INT >= P) bundle.putParcelable(KEY_SENDER_PERSON, toAndroidPerson(sender));
+		}
+		if (message.getDataMimeType() != null) bundle.putString(KEY_DATA_MIME_TYPE, message.getDataMimeType());
+		if (message.getDataUri() != null) bundle.putParcelable(KEY_DATA_URI, message.getDataUri());
+		if (SDK_INT >= O && ! message.getExtras().isEmpty()) bundle.putBundle(KEY_EXTRAS_BUNDLE, message.getExtras());
+		//if (message.isRemoteInputHistory()) bundle.putBoolean(KEY_REMOTE_INPUT_HISTORY, message.isRemoteInputHistory());
+		return bundle;
+	}
+
+	@RequiresApi(P) @SuppressLint("RestrictedApi") private static android.app.Person toAndroidPerson(final Person user) {
+		return user.toAndroidPerson();
 	}
 
 	interface Controller { void recastNotification(String key, Bundle addition); }
