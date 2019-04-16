@@ -39,12 +39,15 @@ class ConversationManager {
 
 		int getType() { return mType; }
 
-		void setType(final int type) {
-			if (type == this.mType) return;
-			this.mType = type;
+		/** @return previous type */
+		int setType(final int type) {
+			if (type == mType) return type;
+			final int previous_type = mType;
+			mType = type;
 			sender = type == TYPE_UNKNOWN || type == TYPE_GROUP_CHAT ? SENDER_PLACEHOLDER
 					: sender.toBuilder().setKey(key).setBot(type == TYPE_BOT_MESSAGE).build();	// Always set key as it may change
 			if (type != TYPE_GROUP_CHAT) mParticipants.clear();
+			return previous_type;
 		}
 
 		CharSequence getTitle() { return mTitle; }

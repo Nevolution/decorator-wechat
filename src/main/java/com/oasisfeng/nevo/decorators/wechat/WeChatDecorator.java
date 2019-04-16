@@ -31,9 +31,11 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Process;
 import android.provider.Settings;
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation;
+import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation.ConversationType;
 import com.oasisfeng.nevo.sdk.MutableNotification;
 import com.oasisfeng.nevo.sdk.MutableStatusBarNotification;
 import com.oasisfeng.nevo.sdk.NevoDecoratorService;
@@ -88,10 +90,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 			return;
 		}
 		if (title != (title = EmojiTranslator.translate(title))) extras.putCharSequence(EXTRA_TITLE, title);
-
-		final int original_id = evolving.getOriginalId();
-		if (BuildConfig.DEBUG) extras.putString("nevo.debug", "ID:" + original_id + ",t:" + n.tickerText);
-
 		n.color = PRIMARY_COLOR;        // Tint the small icon
 
 		final String channel_id = SDK_INT >= O ? n.getChannelId() : null;
@@ -114,12 +112,13 @@ public class WeChatDecorator extends NevoDecoratorService {
 			final int title_hash = title.hashCode();	// Not using the hash code of original title, which might have already evolved.
 			evolving.setId(title_hash);
 			conversation = mConversationManager.getConversation(title_hash);
-		} else conversation = mConversationManager.getConversation(original_id);
+		} else conversation = mConversationManager.getConversation(evolving.getOriginalId());
 
 		conversation.setTitle(title);
-		if (conversation.getType() == Conversation.TYPE_UNKNOWN && isGroupChat(n.tickerText, title.toString(), extras.getCharSequence(Notification.EXTRA_TEXT)))
-			conversation.setType(Conversation.TYPE_GROUP_CHAT);
+		if (conversation.getType() == Conversation.TYPE_UNKNOWN)
+			conversation.setType(guessConversationType(n.tickerText, title, extras.getCharSequence(Notification.EXTRA_TEXT)));
 		final boolean is_group_chat = conversation.getType() == Conversation.TYPE_GROUP_CHAT;
+		if (BuildConfig.DEBUG) extras.putString("nevo.debug", "T" + conversation.getType() + "," + n.tickerText);
 
 		extras.putBoolean(Notification.EXTRA_SHOW_WHEN, true);
 		if (BuildConfig.DEBUG) n.flags &= ~ Notification.FLAG_LOCAL_ONLY;
@@ -169,15 +168,27 @@ public class WeChatDecorator extends NevoDecoratorService {
 	// [Service message with 1 unread]	Ticker: "FedEx: Delivered",	Title: "FedEx",	Content: "[Link] Delivered"
 	// [Group chat with 1 unread]		Ticker: "Oasis: Hello",		Title: "Group",	Content: "Oasis: Hello"
 	// [Group chat with >1 unread]		Ticker: "Oasis: [Link] Mm",	Title: "Group",	Content: "[2]Oasis: [Link] Mm"
-	private static boolean isGroupChat(final CharSequence ticker_text, final String title, final CharSequence content_text) {
-		if (content_text == null) return false;
-		final String ticker = ticker_text.toString().trim();	// Ticker text (may contain trailing spaces) always starts with sender (same as title for direct message, but not for group chat).
-		final String content = content_text.toString();			// Content text includes sender for group and service messages, but not for direct messages.
-		final int pos = content.indexOf(ticker.substring(0, Math.min(10, ticker.length())));    // Seek for the first 10 chars of ticker in content.
+	private static @ConversationType int guessConversationType(final CharSequence ticker_raw, final CharSequence title, final CharSequence content) {
+		if (content == null) return Conversation.TYPE_UNKNOWN;
+		final String ticker = ticker_raw.toString().trim();	// Ticker text (may contain trailing spaces) always starts with sender (same as title for direct message, but not for group chat).
+		// Content text includes sender for group and service messages, but not for direct messages.
+		final int pos = TextUtils.indexOf(content, ticker.substring(0, Math.min(10, ticker.length())));    // Seek for the first 10 chars of ticker in content.
 		if (pos >= 0 && pos <= 6) {        // Max length (up to 999 unread): [999t]
-			final String message = pos > 0 && content.charAt(0) == '[' ? content.substring(pos) : content;    // Content without unread count prefix
-			return ! message.startsWith(title + SENDER_MESSAGE_SEPARATOR);    // If positive, most probably a direct message with more than 1 unread
-		} else return false;                                        // Most probably a direct message with 1 unread
+			// The content without unread count prefix, may or may not start with sender nick
+			final CharSequence message = pos > 0 && content.charAt(0) == '[' ? content.subSequence(pos, content.length()) : content;
+			// message.startsWith(title + SENDER_MESSAGE_SEPARATOR)
+			if (startsWith(message, title, SENDER_MESSAGE_SEPARATOR))		// The title of group chat is group name, not the message sender
+				return Conversation.TYPE_DIRECT_MESSAGE;	// Most probably a direct message with more than 1 unread
+			return Conversation.TYPE_GROUP_CHAT;
+		} else if (TextUtils.indexOf(ticker, content) >= 0) {
+			return Conversation.TYPE_UNKNOWN;				// Indistinguishable (direct message with 1 unread, or a service text message without link)
+		} else return Conversation.TYPE_BOT_MESSAGE;		// Most probably a service message with link
+	}
+
+	private static boolean startsWith(final CharSequence text, final CharSequence needle1, @SuppressWarnings("SameParameterValue") final String needle2) {
+		final int needle1_length = needle1.length(), needle2_length = needle2.length();
+		return text.length() > needle1_length + needle2_length && TextUtils.regionMatches(text, 0, needle1, 0, needle1_length)
+				&& TextUtils.regionMatches(text, needle1_length, needle2, 0, needle2_length);
 	}
 
 	@Override protected void onNotificationRemoved(final String key, final int reason) {
@@ -206,7 +217,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 			// WeChat versions targeting O+ have its own channels for message and misc
 			channels.add(migrate(OLD_CHANNEL_MESSAGE,	CHANNEL_MESSAGE,	R.string.channel_message, false));
 			channels.add(migrate(OLD_CHANNEL_MISC,		CHANNEL_MISC,		R.string.channel_misc, true));
-			createNotificationChannels(WECHAT_PACKAGE, channels);
+			createNotificationChannels(WECHAT_PACKAGE, Process.myUserHandle(), channels);
 		}
 	}
 
