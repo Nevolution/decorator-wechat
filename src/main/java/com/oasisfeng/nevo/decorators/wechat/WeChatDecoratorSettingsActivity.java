@@ -17,9 +17,8 @@ import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 
 import androidx.annotation.Nullable;
 
-import static android.content.Intent.ACTION_INSTALL_PACKAGE;
-import static android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION;
 import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.WECHAT_PACKAGE;
+import static java.util.Objects.requireNonNull;
 
 /**
  * Entry activity. Some ROMs (including Samsung, OnePlus) require a launcher activity to allow any component being bound by other app.
@@ -69,7 +68,7 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		preference_extension.setSelectable(! android_auto_installed);
 		preference_extension.setSummary(android_auto_installed ? R.string.pref_extension_summary_installed
 				: isPlayStoreSystemApp() ? R.string.pref_extension_summary_auto : R.string.pref_extension_summary);
-		preference_extension.setOnPreferenceClickListener(android_auto_installed ? null : this::installExtension);
+		preference_extension.setOnPreferenceClickListener(android_auto_installed ? null : this::redirectToExtensionPageOnline);
 
 		@SuppressWarnings("deprecation") final Preference preference_version = findPreference(getString(R.string.pref_version));
 		try {
@@ -81,7 +80,7 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 				preference_extension.setEnabled(true);
 				preference_extension.setSelectable(true);
 				preference_extension.setSummary(R.string.pref_extension_summary);
-				preference_extension.setOnPreferenceClickListener(this::installExtension);
+				preference_extension.setOnPreferenceClickListener(this::redirectToExtensionPageOnline);
 			}
 			return true;
 		});
@@ -90,7 +89,7 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 	private boolean installNevolution(final @SuppressWarnings("unused") Preference preference) {
 		try {
 			startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(APP_MARKET_PREFIX + NEVOLUTION_PACKAGE)));
-		} catch (final ActivityNotFoundException e) {}	// TODO: Landing web page
+		} catch (final ActivityNotFoundException ignored) {}	// TODO: Landing web page
 		return true;
 	}
 
@@ -105,13 +104,15 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		return true;
 	}
 
-	private boolean installExtension(final @SuppressWarnings("unused") Preference preference) {
-		if (mVersionClickCount > 0 && isPlayStoreSystemApp())
-			startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(APP_MARKET_PREFIX + ANDROID_AUTO_PACKAGE)).setPackage(PLAY_STORE_PACKAGE));
-		else try {
-			final String authority = getPackageManager().getProviderInfo(new ComponentName(this, AssetFileProvider.class), 0).authority;
-			startActivity(new Intent(ACTION_INSTALL_PACKAGE, Uri.parse("content://" + authority + "/dummy-auto.apk")).addFlags(FLAG_GRANT_READ_URI_PERMISSION));
-		} catch (final PackageManager.NameNotFoundException | ActivityNotFoundException ignored) {}	// Should never happen
+	private boolean redirectToExtensionPageOnline(@SuppressWarnings("unused") final Preference preference) {
+		final Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Nevolution/decorator-wechat"));
+		try {
+			startActivity(intent);
+		} catch (final ActivityNotFoundException e) {
+			try {
+				startActivity(intent.setData(requireNonNull(intent.getData()).buildUpon().scheme("http").build()));
+			} catch (final ActivityNotFoundException ignored) {}
+		}
 		return true;
 	}
 
