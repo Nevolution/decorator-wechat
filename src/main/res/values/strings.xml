@@ -16,9 +16,9 @@
   -->
 
 <resources>
-    <string name="decorator_wechat_label">Nevo - WeChat Modernized</string>
+    <string name="decorator_wechat_label">Nevo - IM Modernized (WeChat)</string>
     <string name="decorator_wechat_title">WeChat Modernized</string>
-    <string name="decorator_wechat_description">Enhance WeChat notifications with expandable conversation, direct reply, swipe to mark read and more.</string>
+    <string name="decorator_wechat_description">Enhance notifications with expandable conversation, direct reply, swipe to mark read and more.</string>
     <string name="self_display_name">You</string>
     <string name="action_reply">Reply</string>
     <string name="action_preview_image">Preview Image</string>
