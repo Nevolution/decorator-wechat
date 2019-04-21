@@ -138,6 +138,8 @@ class MessagingBuilder {
 		final Notification.CarExtender extender = new Notification.CarExtender(n);
 		final CarExtender.UnreadConversation convs = extender.getUnreadConversation();
 		if (convs == null) return null;
+		final long latest_timestamp = convs.getLatestTimestamp();
+		if (latest_timestamp > 0) n.when = latest_timestamp;
 
 		final PendingIntent on_reply = convs.getReplyPendingIntent();
 		if (conversation.key == null) try {
