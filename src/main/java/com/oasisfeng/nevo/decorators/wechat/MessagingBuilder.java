@@ -3,6 +3,7 @@ package com.oasisfeng.nevo.decorators.wechat;
 import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.Notification.Action;
+import android.app.Notification.CarExtender;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.RemoteInput;
@@ -13,7 +14,6 @@ import android.content.IntentFilter;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Parcelable;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Profile;
 import android.service.notification.StatusBarNotification;
@@ -50,7 +50,7 @@ import static androidx.core.app.NotificationCompat.EXTRA_CONVERSATION_TITLE;
 import static androidx.core.app.NotificationCompat.EXTRA_IS_GROUP_CONVERSATION;
 import static androidx.core.app.NotificationCompat.EXTRA_MESSAGES;
 import static androidx.core.app.NotificationCompat.EXTRA_SELF_DISPLAY_NAME;
-import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.SENDER_MESSAGE_SEPARATOR;
+import static com.oasisfeng.nevo.decorators.wechat.WeChatMessage.SENDER_MESSAGE_SEPARATOR;
 
 /**
  * Build the modernized {@link MessagingStyle} for WeChat conversation.
@@ -68,20 +68,6 @@ class MessagingBuilder {
 	private static final String EXTRA_RESULT_KEY = "result_key";
 	private static final String EXTRA_ORIGINAL_KEY = "original_key";
 	private static final String EXTRA_REPLY_PREFIX = "reply_prefix";
-
-	/* From Notification.CarExtender */
-	private static final String EXTRA_CAR_EXTENDER = "android.car.EXTENSIONS";
-	private static final String EXTRA_CONVERSATION = "car_conversation";	// In the bundle of EXTRA_CAR_EXTENDER
-	/* From Notification.CarExtender.UnreadConversation */
-	private static final String CAR_KEY_REMOTE_INPUT = "remote_input";		// In the bundle of EXTRA_CONVERSATION
-	private static final String CAR_KEY_ON_REPLY = "on_reply";
-	private static final String CAR_KEY_ON_READ = "on_read";
-	private static final String CAR_KEY_PARTICIPANTS = "participants";
-	private static final String CAR_KEY_MESSAGES = "messages";
-
-	private static final String CAR_KEY_AUTHOR = "author";					// In the bundle of CAR_KEY_MESSAGES
-	private static final String CAR_KEY_TEXT = "text";
-	private static final String CAR_KEY_TIMESTAMP = "timestamp";
 
 	private static final String KEY_TEXT = "text";
 	private static final String KEY_TIMESTAMP = "time";
@@ -149,20 +135,11 @@ class MessagingBuilder {
 
 	@Nullable MessagingStyle buildFromExtender(final Conversation conversation, final MutableStatusBarNotification sbn) {
 		final MutableNotification n = sbn.getNotification();
-		final Bundle car_extender = n.extras.getBundle(EXTRA_CAR_EXTENDER);
-		if (car_extender == null) return null;
-		final Bundle convs = car_extender.getBundle(EXTRA_CONVERSATION);
-		if (convs == null) {
-			Log.w(TAG, EXTRA_CONVERSATION + " is missing");
-			return null;
-		}
-		final Parcelable[] parcelable_messages = convs.getParcelableArray(CAR_KEY_MESSAGES);
-		if (parcelable_messages == null) {
-			Log.w(TAG, CAR_KEY_MESSAGES + " is missing");
-			return null;
-		}
+		final Notification.CarExtender extender = new Notification.CarExtender(n);
+		final CarExtender.UnreadConversation convs = extender.getUnreadConversation();
+		if (convs == null) return null;
 
-		final PendingIntent on_reply = convs.getParcelable(CAR_KEY_ON_REPLY);
+		final PendingIntent on_reply = convs.getReplyPendingIntent();
 		if (conversation.key == null) try {
 			if (on_reply != null) on_reply.send(mContext, 0, null, (p, intent, r, d, b) -> {
 				final String key = conversation.key = intent.getStringExtra(KEY_USERNAME);	// setType() below will trigger rebuilding of conversation sender.
@@ -180,38 +157,33 @@ class MessagingBuilder {
 		}
 
 		final MessagingStyle messaging = new MessagingStyle(mUserSelf);
-		if (parcelable_messages.length == 0) {		// When only one message in this conversation
+		final String[] car_messages = convs.getMessages();
+		if (car_messages.length == 0) {		// When only one message in this conversation
 			final Message message = buildMessage(conversation, n.when, n.tickerText, n.extras.getCharSequence(EXTRA_TEXT), null);
 			messaging.addMessage(message);
-		} else for (int i = 0, num_messages = parcelable_messages.length; i < num_messages; i ++) {
-			final Parcelable parcelable = parcelable_messages[i];
-			if (! (parcelable instanceof Bundle)) return null;
-			final Bundle car_message = (Bundle) parcelable;
-			final String text = car_message.getString(CAR_KEY_TEXT);
-			if (text == null) continue;
-			final long timestamp = car_message.getLong(CAR_KEY_TIMESTAMP);			// Appears always 0    (not yet implemented by WeChat)
-			final @Nullable String author = car_message.getString(CAR_KEY_AUTHOR);	// Appears always null (not yet implemented by WeChat)
+		} else for (int i = 0, num_messages = car_messages.length; i < num_messages; i ++) {
+			final String text = car_messages[i];
 			final CharSequence n_text = n.extras.getCharSequence(EXTRA_TEXT);
 			if (conversation.getType() == Conversation.TYPE_UNKNOWN && num_messages == 1 && TextUtils.equals(text, n_text))
-				conversation.setType(Conversation.TYPE_DIRECT_MESSAGE);		// Extra chance to detect direct message indistinguishable from bot message.
+				conversation.setType(Conversation.TYPE_DIRECT_MESSAGE);        // Extra chance to detect direct message indistinguishable from bot message.
 			if (i == num_messages - 1 && TextUtils.indexOf(n.tickerText, n_text) >= 0 && TextUtils.indexOf(n.tickerText, text) < 0
-					&& TextUtils.indexOf(text, n_text) < 0) {	// The last check for case: text="[Link] ABC", n_text="ABC" (commonly seen in bot messages)
+					&& TextUtils.indexOf(text, n_text) < 0) {    // The last check for case: text="[Link] ABC", n_text="ABC" (commonly seen in bot messages)
 				// The last message inside car extender is inconsistent with the outer ticker and content text, it should be a reply sent by the user.
 				messaging.addMessage(buildMessage(conversation, 0, n.tickerText, n_text, null));
-				messaging.addMessage(buildMessage(conversation, timestamp, null, text, ""/* special mark for "self" */));
-			} else messaging.addMessage(buildMessage(conversation, timestamp, i == num_messages - 1 ? n.tickerText : null, text, author));
+				messaging.addMessage(buildMessage(conversation, 0, null, text, ""/* special mark for "self" */));
+			} else messaging.addMessage(buildMessage(conversation, 0, i == num_messages - 1 ? n.tickerText : null, text, null));
 		}
 
-		final PendingIntent on_read = convs.getParcelable(CAR_KEY_ON_READ);
+		final PendingIntent on_read = convs.getReadPendingIntent();
 		if (on_read != null) mMarkReadPendingIntents.put(sbn.getKey(), on_read);	// Mapped by evolved key,
 
 		final RemoteInput remote_input;
-		if (SDK_INT >= N && on_reply != null && (remote_input = convs.getParcelable(CAR_KEY_REMOTE_INPUT)) != null) {
+		if (SDK_INT >= N && on_reply != null && (remote_input = convs.getRemoteInput()) != null) {
 			final CharSequence[] input_history = n.extras.getCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY);
 			final PendingIntent proxy = proxyDirectReply(sbn, on_reply, remote_input, input_history, null);
 			final RemoteInput.Builder reply_remote_input = new RemoteInput.Builder(remote_input.getResultKey()).addExtras(remote_input.getExtras())
 					.setAllowFreeFormInput(true).setChoices(SmartReply.generateChoices(messaging));
-			final String[] participants = convs.getStringArray(CAR_KEY_PARTICIPANTS);
+			final String[] participants = convs.getParticipants();
 			if (participants != null && participants.length > 0) {
 				final StringBuilder label = new StringBuilder();
 				for (final String participant : participants) label.append(',').append(participant);
@@ -251,9 +223,9 @@ class MessagingBuilder {
 		final Person person;
 		if (sender != null && sender.isEmpty()) person = null;		// Empty string as a special mark for "self"
 		else if (conversation.getType() == Conversation.TYPE_GROUP_CHAT) {
-			final String ticker_sender = ticker != null ? extractSenderFromText(ticker) : null;	// Group nick is used in ticker while original nick in sender.
+			final String ticker_sender = ticker != null ? extractSenderFromText(ticker) : null;	// Group nick is used in ticker and content text, while original nick in sender.
 			person = sender == null ? null : conversation.getGroupParticipant(sender, ticker_sender != null ? ticker_sender : sender);
-		} else return new Message(actual_text, when, conversation.sender);
+		} else person = conversation.sender;
 		return new Message(actual_text, when, person);
 	}
 
