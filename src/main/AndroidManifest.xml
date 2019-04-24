@@ -16,7 +16,7 @@
   -->
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"
-          package="com.oasisfeng.nevo.decorators.wechat" android:versionCode="21000" android:versionName="2.1">
+          package="com.oasisfeng.nevo.decorators.wechat" android:versionCode="25000" android:versionName="2.5">
 
     <application android:label="@string/decorator_wechat_label" android:allowBackup="true" android:icon="@mipmap/ic_launcher"
                  android:directBootAware="true" tools:targetApi="N" tools:ignore="GoogleAppIndexingWarning">
