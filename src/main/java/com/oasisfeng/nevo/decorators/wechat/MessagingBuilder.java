@@ -11,6 +11,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
@@ -177,7 +178,7 @@ class MessagingBuilder {
 			if (SDK_INT >= P) reply_action.setSemanticAction(Action.SEMANTIC_ACTION_REPLY);
 			n.addAction(reply_action.build());
 
-			if (conversation.isGroupChat()) {
+			if (conversation.isGroupChat() && mPreferences.getBoolean(mPrefKeyMentionAction, false)) {
 				final Person last_sender = messages[messages.length - 1].getPerson();
 				if (last_sender != null && last_sender != mUserSelf) {
 					final String label = "@" + last_sender.getName(), prefix = "@" + Conversation.getOriginalName(last_sender) + MENTION_SEPARATOR;
@@ -344,11 +345,13 @@ class MessagingBuilder {
 
 	interface Controller { void recastNotification(String key, Bundle addition); }
 
-	MessagingBuilder(final Context context, final Controller controller) {
+	MessagingBuilder(final Context context, final SharedPreferences preferences, final Controller controller) {
 		mContext = context;
+		mPreferences = preferences;
 		mController = controller;
 		mUserSelf = buildPersonFromProfile(context);
 
+		mPrefKeyMentionAction = context.getString(R.string.pref_mention_action);
 		final IntentFilter filter = new IntentFilter(ACTION_REPLY); filter.addAction(ACTION_MENTION); filter.addDataScheme(SCHEME_KEY);
 		context.registerReceiver(mReplyReceiver, filter);
 	}
@@ -370,8 +373,10 @@ class MessagingBuilder {
 	}
 
 	private final Context mContext;
+	private final SharedPreferences mPreferences;
 	private final Controller mController;
 	private final Person mUserSelf;
+	private final String mPrefKeyMentionAction;
 	private final Map<String/* evolved key */, PendingIntent> mMarkReadPendingIntents = new ArrayMap<>();
 	private static final String TAG = WeChatDecorator.TAG;
 }

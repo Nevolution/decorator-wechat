@@ -37,6 +37,8 @@
     <string name="pref_extension_summary">Add more features (direct reply, swipe to mark read and etc)</string>
     <string name="pref_extension_summary_auto">\"Android Auto\" is required to support more features (direct reply, swipe to mark read and etc).</string>
     <string name="pref_extension_summary_installed">Installed</string>
+    <string name="pref_mention_action_title">Add @mention action (beta)</string>
+    <string name="pref_mention_action_summary">An extra direct reply action to mention the last participant in group chat.\nBeware, this will *NOT* trigger alert for mentioned participant as the mention sent in WeChat conversation UI.</string>
     <string name="pref_wear_title">Wear OS (beta)</string>
     <string name="pref_wear_summary">Sync notifications to Wear OS devices.</string>
     <string name="pref_version_title">Version</string>

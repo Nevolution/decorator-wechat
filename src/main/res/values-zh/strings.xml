@@ -37,6 +37,8 @@
     <string name="pref_extension_summary">添加更多特性（快捷回复、划掉标记已读 等）</string>
     <string name="pref_extension_summary_auto">需要安装“Android Auto”以支持更多特性（快捷回复、划掉标记已读 等）</string>
     <string name="pref_extension_summary_installed">已安装</string>
+    <string name="pref_mention_action_title">添加 @提及 式快捷回复</string>
+    <string name="pref_mention_action_summary">额外的快捷回复操作，提及群聊中的最后发言者。\n注意，受微信的接口限制，这 *不会* 像在微信聊天界面中的提及动作那样触发对方的提醒。</string>
     <string name="pref_wear_title">Wear OS (实验性)</string>
     <string name="pref_wear_summary">同步通知至 Wear OS 设备</string>
     <string name="pref_version_title">版本</string>
