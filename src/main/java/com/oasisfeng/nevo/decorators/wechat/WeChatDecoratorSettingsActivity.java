@@ -6,17 +6,21 @@ import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
+import android.preference.PreferenceManager;
 
 import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 
 import androidx.annotation.Nullable;
 
+import static android.os.Build.VERSION.SDK_INT;
+import static android.os.Build.VERSION_CODES.N;
 import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.WECHAT_PACKAGE;
 import static java.util.Objects.requireNonNull;
 
@@ -33,12 +37,16 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 
 	@Override protected void onCreate(@Nullable final Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		if (SDK_INT >= N) //noinspection deprecation
+			getPreferenceManager().setStorageDeviceProtected();
 		//noinspection deprecation
 		addPreferencesFromResource(R.xml.settings);
 	}
 
 	@Override protected void onResume() {
 		super.onResume();
+		PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(mPreferencesChangeListener);
+
 		@SuppressWarnings("deprecation") final Preference preference_activate = findPreference(getString(R.string.pref_activate));
 		boolean nevolution_installed = false, wechat_installed = false, running = false;
 		try {
@@ -86,6 +94,11 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		});
 	}
 
+	@Override protected void onPause() {
+		super.onPause();
+		PreferenceManager.getDefaultSharedPreferences(this).unregisterOnSharedPreferenceChangeListener(mPreferencesChangeListener);
+	}
+
 	private boolean installNevolution(final @SuppressWarnings("unused") Preference preference) {
 		try {
 			startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(APP_MARKET_PREFIX + NEVOLUTION_PACKAGE)));
@@ -123,6 +136,9 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 			return false;
 		}
 	}
+
+	private final SharedPreferences.OnSharedPreferenceChangeListener mPreferencesChangeListener = (prefs, key)
+			-> sendBroadcast(new Intent(WeChatDecorator.ACTION_SETTINGS_CHANGED).setPackage(getPackageName()));
 
 	private final BroadcastReceiver mDummyReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context c, final Intent i) {}};
 	private int mVersionClickCount;

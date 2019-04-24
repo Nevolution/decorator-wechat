@@ -32,10 +32,12 @@
     <string name="pref_activate_title">启用</string>
     <string name="pref_activate_summary_wechat_not_installed">“微信”未安装</string>
     <string name="pref_activate_summary_nevo_not_installed">“女娲石”尚未安装</string>
+    <string name="pref_activate_summary_already_activated">已启用</string>
     <string name="pref_extension_title">扩展包</string>
     <string name="pref_extension_summary">添加更多特性（快捷回复、划掉标记已读 等）</string>
     <string name="pref_extension_summary_auto">需要安装“Android Auto”以支持更多特性（快捷回复、划掉标记已读 等）</string>
-    <string name="pref_activate_summary_already_activated">已启用</string>
     <string name="pref_extension_summary_installed">已安装</string>
+    <string name="pref_wear_title">Wear OS (实验性)</string>
+    <string name="pref_wear_summary">同步通知至 Wear OS 设备</string>
     <string name="pref_version_title">版本</string>
 </resources>

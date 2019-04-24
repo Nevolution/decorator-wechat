@@ -9,6 +9,12 @@
         android:title="@string/pref_extension_title"
         android:summary="@string/pref_extension_summary" />
 
+    <SwitchPreference
+        android:key="@string/pref_wear"
+        android:title="@string/pref_wear_title"
+        android:defaultValue="false"
+        android:summary="@string/pref_wear_summary" />
+
     <Preference
         android:key="@string/pref_version"
         android:title="@string/pref_version_title" />

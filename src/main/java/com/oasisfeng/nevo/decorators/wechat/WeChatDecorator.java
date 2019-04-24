@@ -23,6 +23,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.media.AudioAttributes;
@@ -30,6 +31,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Process;
+import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.service.notification.StatusBarNotification;
 import android.util.Log;
@@ -128,7 +130,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final boolean is_group_chat = conversation.isGroupChat();
 
 		extras.putBoolean(Notification.EXTRA_SHOW_WHEN, true);
-		if (BuildConfig.DEBUG) n.flags &= ~ Notification.FLAG_LOCAL_ONLY;
+		if (mPreferences.getBoolean(mPrefKeyWear, false)) n.flags &= ~ Notification.FLAG_LOCAL_ONLY;
 		n.setSortKey(String.valueOf(Long.MAX_VALUE - n.when + (is_group_chat ? GROUP_CHAT_SORT_KEY_SHIFT : 0))); // Place group chat below other messages
 		if (SDK_INT >= O) {
 			if (extras.containsKey(KEY_SILENT_REVIVAL)) {
@@ -244,12 +246,17 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	@Override public void onCreate() {
 		super.onCreate();
+		loadPreferences();
+		mPrefKeyWear = getString(R.string.pref_wear);
+
 		mMessagingBuilder = new MessagingBuilder(this, this::recastNotification);
 		final IntentFilter filter = new IntentFilter(Intent.ACTION_PACKAGE_REMOVED); filter.addDataScheme("package");
 		registerReceiver(mPackageEventReceiver, filter);
+		registerReceiver(mSettingsChangedReceiver, new IntentFilter(ACTION_SETTINGS_CHANGED));
 	}
 
 	@Override public void onDestroy() {
+		unregisterReceiver(mSettingsChangedReceiver);
 		unregisterReceiver(mPackageEventReceiver);
 		mMessagingBuilder.close();
 		super.onDestroy();
@@ -285,13 +292,29 @@ public class WeChatDecorator extends NevoDecoratorService {
 		return START_NOT_STICKY;
 	}
 
+	private void loadPreferences() {
+		final Context context = SDK_INT >= N ? createDeviceProtectedStorageContext() : this;
+		//noinspection deprecation
+		mPreferences = context.getSharedPreferences(getDefaultSharedPreferencesName(context), MODE_MULTI_PROCESS);
+	}
+
+	private static String getDefaultSharedPreferencesName(final Context context) {
+		return SDK_INT >= N ? PreferenceManager.getDefaultSharedPreferencesName(context) : context.getPackageName() + "_preferences";
+	}
+
 	private final BroadcastReceiver mPackageEventReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context context, final Intent intent) {
 		if (intent.getData() != null && WECHAT_PACKAGE.equals(intent.getData().getSchemeSpecificPart())) mDistinctIdSupported = null;
+	}};
+
+	private final BroadcastReceiver mSettingsChangedReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context context, final Intent intent) {
+		loadPreferences();
 	}};
 
 	private final ConversationManager mConversationManager = new ConversationManager();
 	private MessagingBuilder mMessagingBuilder;
 	private boolean mWeChatTargetingO;
+	private SharedPreferences mPreferences;
+	private String mPrefKeyWear;
 	private final Handler mHandler = new Handler();
 
 	static final String TAG = "Nevo.Decorator[WeChat]";
