@@ -12,6 +12,14 @@ Enhance notification experience of WeChat with following features:
 * Non-group messages placed above group messages in notification group.
 * Colorized notification icon.
 
+
+Extension Pack
+--------------
+[APK download](https://github.com/Nevolution/decorator-wechat/releases/tag/ext)
+
+No need to install the extension pack if you have Android Auto installed.
+
+
 Contribution
 ------------
 
