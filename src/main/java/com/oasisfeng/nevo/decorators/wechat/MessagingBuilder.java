@@ -12,7 +12,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.ContactsContract.Contacts;
@@ -357,15 +356,8 @@ class MessagingBuilder {
 	}
 
 	private static Person buildPersonFromProfile(final Context context) {
-		final Person.Builder self = new Person.Builder().setName(context.getString(R.string.self_display_name));
-		try (final Cursor cursor = context.getContentResolver().query(Profile.CONTENT_URI,
-				new String[] { Contacts._ID, Contacts.LOOKUP_KEY, Contacts.PHOTO_THUMBNAIL_URI }, null, null, null)) {
-			if (cursor == null || ! cursor.moveToFirst()) return self.build();
-			final long id = cursor.getLong(0); final String lookup_key = cursor.getString(1);
-			final String photo = cursor.getString(2);
-			final Uri lookup = lookup_key == null ? null : Contacts.getLookupUri(id, lookup_key);
-			return self.setUri(lookup != null ? lookup.toString() : null).setIcon(photo == null ? null : IconCompat.createWithContentUri(photo)).build();
-		}
+		return new Person.Builder().setName(context.getString(R.string.self_display_name))
+				.setIcon(IconCompat.createWithContentUri(Uri.withAppendedPath(Profile.CONTENT_URI, Contacts.Photo.DISPLAY_PHOTO))).build();
 	}
 
 	void close() {
