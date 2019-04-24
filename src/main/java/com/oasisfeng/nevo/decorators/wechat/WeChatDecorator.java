@@ -31,16 +31,17 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Process;
 import android.provider.Settings;
-import android.text.TextUtils;
+import android.service.notification.StatusBarNotification;
 import android.util.Log;
 
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation;
-import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation.ConversationType;
 import com.oasisfeng.nevo.sdk.MutableNotification;
 import com.oasisfeng.nevo.sdk.MutableStatusBarNotification;
 import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -50,6 +51,7 @@ import androidx.annotation.RequiresApi;
 import androidx.annotation.StringRes;
 import androidx.core.app.NotificationCompat.MessagingStyle;
 
+import static android.app.Notification.EXTRA_TEXT;
 import static android.app.Notification.EXTRA_TITLE;
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.N;
@@ -77,7 +79,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	private static final @ColorInt int PRIMARY_COLOR = 0xFF33B332;
 	private static final @ColorInt int LIGHT_COLOR = 0xFF00FF00;
-	static final String SENDER_MESSAGE_SEPARATOR = ": ";
+	static final String ACTION_SETTINGS_CHANGED = "SETTINGS_CHANGED";
+	static final String ACTION_DEBUG_NOTIFICATION = "DEBUG";
 	private static final String KEY_SILENT_REVIVAL = "nevo.wechat.revival";
 
 	@Override public void apply(final MutableStatusBarNotification evolving) {
@@ -103,6 +106,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 			Log.d(TAG, "Skip further process for non-conversation notification: " + title);    // E.g. web login confirmation notification.
 			return;
 		}
+		final CharSequence content_text = extras.getCharSequence(EXTRA_TEXT);
+		if (content_text == null) return;
 
 		// WeChat previously uses dynamic counter starting from 4097 as notification ID, which is reused after cancelled by WeChat itself,
 		//   causing conversation duplicate or overwritten notifications.
@@ -115,10 +120,12 @@ public class WeChatDecorator extends NevoDecoratorService {
 		} else conversation = mConversationManager.getConversation(evolving.getOriginalId());
 
 		conversation.setTitle(title);
+		conversation.summary = content_text;
+		conversation.ticker = n.tickerText;
+		conversation.timestamp = n.when;
 		if (conversation.getType() == Conversation.TYPE_UNKNOWN)
-			conversation.setType(guessConversationType(n.tickerText, title, extras.getCharSequence(Notification.EXTRA_TEXT)));
-		final boolean is_group_chat = conversation.getType() == Conversation.TYPE_GROUP_CHAT;
-		if (BuildConfig.DEBUG) extras.putString("nevo.debug", "T" + conversation.getType() + "," + n.tickerText);
+			conversation.setType(WeChatMessage.guessConversationType(conversation));
+		final boolean is_group_chat = conversation.isGroupChat();
 
 		extras.putBoolean(Notification.EXTRA_SHOW_WHEN, true);
 		if (BuildConfig.DEBUG) n.flags &= ~ Notification.FLAG_LOCAL_ONLY;
@@ -162,34 +169,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 		return version != 0 && (mDistinctIdSupported = version >= 1340);	// Distinct ID is supported since WeChat 6.7.3.
 	}
 	private Boolean mDistinctIdSupported;
-
-	// [Direct message with 1 unread]	Ticker: "Oasis: Hello",		Title: "Oasis",	Content: "Hello"
-	// [Direct message with >1 unread]	Ticker: "Oasis: Hello",		Title: "Oasis",	Content: "[2]Oasis: Hello"
-	// [Service message with 1 unread]	Ticker: "FedEx: Delivered",	Title: "FedEx",	Content: "[Link] Delivered"
-	// [Group chat with 1 unread]		Ticker: "Oasis: Hello",		Title: "Group",	Content: "Oasis: Hello"
-	// [Group chat with >1 unread]		Ticker: "Oasis: [Link] Mm",	Title: "Group",	Content: "[2]Oasis: [Link] Mm"
-	private static @ConversationType int guessConversationType(final CharSequence ticker_raw, final CharSequence title, final CharSequence content) {
-		if (content == null) return Conversation.TYPE_UNKNOWN;
-		final String ticker = ticker_raw.toString().trim();	// Ticker text (may contain trailing spaces) always starts with sender (same as title for direct message, but not for group chat).
-		// Content text includes sender for group and service messages, but not for direct messages.
-		final int pos = TextUtils.indexOf(content, ticker.substring(0, Math.min(10, ticker.length())));    // Seek for the first 10 chars of ticker in content.
-		if (pos >= 0 && pos <= 6) {        // Max length (up to 999 unread): [999t]
-			// The content without unread count prefix, may or may not start with sender nick
-			final CharSequence message = pos > 0 && content.charAt(0) == '[' ? content.subSequence(pos, content.length()) : content;
-			// message.startsWith(title + SENDER_MESSAGE_SEPARATOR)
-			if (startsWith(message, title, SENDER_MESSAGE_SEPARATOR))		// The title of group chat is group name, not the message sender
-				return Conversation.TYPE_DIRECT_MESSAGE;	// Most probably a direct message with more than 1 unread
-			return Conversation.TYPE_GROUP_CHAT;
-		} else if (TextUtils.indexOf(ticker, content) >= 0) {
-			return Conversation.TYPE_UNKNOWN;				// Indistinguishable (direct message with 1 unread, or a service text message without link)
-		} else return Conversation.TYPE_BOT_MESSAGE;		// Most probably a service message with link
-	}
-
-	private static boolean startsWith(final CharSequence text, final CharSequence needle1, @SuppressWarnings("SameParameterValue") final String needle2) {
-		final int needle1_length = needle1.length(), needle2_length = needle2.length();
-		return text.length() > needle1_length + needle2_length && TextUtils.regionMatches(text, 0, needle1, 0, needle1_length)
-				&& TextUtils.regionMatches(text, needle1_length, needle2, 0, needle2_length);
-	}
 
 	@Override protected void onNotificationRemoved(final String key, final int reason) {
 		if (reason == REASON_APP_CANCEL) {		// Only if "Removal-Aware" of Nevolution is activated
@@ -274,6 +253,36 @@ public class WeChatDecorator extends NevoDecoratorService {
 		unregisterReceiver(mPackageEventReceiver);
 		mMessagingBuilder.close();
 		super.onDestroy();
+	}
+
+	@Override public int onStartCommand(final Intent intent, final int flags, final int startId) {
+		String tag = null; int id = 0;
+		if (SDK_INT >= O && BuildConfig.DEBUG && ACTION_DEBUG_NOTIFICATION.equals(intent.getAction())) try {
+			tag = intent.getStringExtra(Notification.EXTRA_NOTIFICATION_TAG);
+			id = intent.getIntExtra(Notification.EXTRA_NOTIFICATION_ID, 0);
+			@SuppressWarnings("deprecation") final String key = new StatusBarNotification(WECHAT_PACKAGE, null, id, tag, getPackageManager()
+					.getPackageUid(WECHAT_PACKAGE, 0), 0, 0, new Notification(), Process.myUserHandle(), 0).getKey();
+			final StatusBarNotification sbn = getLatestNotifications(Collections.singletonList(key)).get(0);
+			final Notification n = sbn.getNotification();
+			final Notification.CarExtender.UnreadConversation conversation = new Notification.CarExtender(n).getUnreadConversation();
+			if (conversation != null) {
+				final String[] lines = Arrays.copyOf(conversation.getMessages(), conversation.getMessages().length + 2);
+				final long t = conversation.getLatestTimestamp();
+				lines[lines.length - 2] = "TS:" + (t == 0 ? "00" : t - n.when) + ",P:" + conversation.getParticipant();
+				lines[lines.length - 1] = n.tickerText != null ? n.tickerText.toString() : null;
+				n.extras.putCharSequenceArray(Notification.EXTRA_TEXT_LINES, lines);
+				n.extras.putString(Notification.EXTRA_TEMPLATE, Notification.InboxStyle.class.getName());
+			} else {
+				if (n.tickerText != null) n.extras.putCharSequence(Notification.EXTRA_BIG_TEXT, n.extras.getCharSequence(EXTRA_TEXT) + "\n" + n.tickerText);
+				n.extras.putString(Notification.EXTRA_TEMPLATE, Notification.BigTextStyle.class.getName());
+			}
+			final NotificationManager nm = getSystemService(NotificationManager.class);
+			nm.createNotificationChannel(new NotificationChannel(n.getChannelId(), "Debug:" + n.getChannelId(), NotificationManager.IMPORTANCE_LOW));
+			nm.notify(tag, id, n);
+		} catch (final PackageManager.NameNotFoundException | RuntimeException e) {
+			Log.e(TAG, "Error debugging notification, id=" + id + ", tag=" + tag, e);
+		}
+		return START_NOT_STICKY;
 	}
 
 	private final BroadcastReceiver mPackageEventReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context context, final Intent intent) {

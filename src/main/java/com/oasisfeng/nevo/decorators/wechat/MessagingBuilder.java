@@ -88,7 +88,7 @@ class MessagingBuilder {
 		}
 
 		final LongSparseArray<CharSequence> lines = new LongSparseArray<>(MAX_NUM_HISTORICAL_LINES);
-		CharSequence text = null;
+		CharSequence text;
 		int count = 0, num_lines_with_colon = 0;
 		final String redundant_prefix = title.toString() + SENDER_MESSAGE_SEPARATOR;
 		for (final StatusBarNotification each : archive) {
@@ -110,12 +110,12 @@ class MessagingBuilder {
 				CharSequence trimmed_text = its_text.subSequence(result >> 16, its_text.length());
 				if (trimmed_text.toString().startsWith(redundant_prefix))	// Remove redundant prefix
 					trimmed_text = trimmed_text.subSequence(redundant_prefix.length(), trimmed_text.length());
-				else if (trimmed_text.toString().indexOf(SENDER_MESSAGE_SEPARATOR) > 0) num_lines_with_colon++;
-				lines.put(notification.when, text = trimmed_text);
+				else if (trimmed_text.toString().indexOf(SENDER_MESSAGE_SEPARATOR) > 0) num_lines_with_colon ++;
+				lines.put(notification.when, trimmed_text);
 			} else {
 				count = 1;
 				lines.put(notification.when, text = its_text);
-				if (text.toString().indexOf(SENDER_MESSAGE_SEPARATOR) > 0) num_lines_with_colon++;
+				if (text.toString().indexOf(SENDER_MESSAGE_SEPARATOR) > 0) num_lines_with_colon ++;
 			}
 		}
 		n.number = count;
@@ -123,8 +123,6 @@ class MessagingBuilder {
 			Log.w(TAG, "No lines extracted, expected " + count);
 			return null;
 		}
-
-		n.extras.putCharSequence(EXTRA_TEXT, text);	// Latest message text for collapsed layout.
 
 		final MessagingStyle messaging = new MessagingStyle(mUserSelf);
 		final boolean sender_inline = num_lines_with_colon == lines.size();
@@ -139,7 +137,7 @@ class MessagingBuilder {
 		final CarExtender.UnreadConversation convs = extender.getUnreadConversation();
 		if (convs == null) return null;
 		final long latest_timestamp = convs.getLatestTimestamp();
-		if (latest_timestamp > 0) n.when = latest_timestamp;
+		if (latest_timestamp > 0) n.when = conversation.timestamp = latest_timestamp;
 
 		final PendingIntent on_reply = convs.getReplyPendingIntent();
 		if (conversation.key == null) try {
@@ -149,9 +147,9 @@ class MessagingBuilder {
 						? Conversation.TYPE_GROUP_CHAT : key.startsWith("gh_") ? Conversation.TYPE_BOT_MESSAGE : Conversation.TYPE_DIRECT_MESSAGE;
 				final int previous_type = conversation.setType(detected_type);
 				if (BuildConfig.DEBUG && SDK_INT >= O && previous_type != Conversation.TYPE_UNKNOWN && detected_type != previous_type) {
-					final Notification clone = sbn.getNotification().clone();
+					final Notification clone = n.clone();
 					final Notification.Builder dn = Notification.Builder.recoverBuilder(mContext, clone).setStyle(null).setSubText(clone.tickerText);
-					mContext.getSystemService(NotificationManager.class).notify(sbn.getTag(), sbn.getId(), dn.setChannelId("guide").build());
+					mContext.getSystemService(NotificationManager.class).notify(key.hashCode(), dn.setChannelId(n.getChannelId()).build());
 				}
 			}, null);
 		} catch (final PendingIntent.CanceledException e) {
@@ -159,22 +157,8 @@ class MessagingBuilder {
 		}
 
 		final MessagingStyle messaging = new MessagingStyle(mUserSelf);
-		final String[] car_messages = convs.getMessages();
-		if (car_messages.length == 0) {		// When only one message in this conversation
-			final Message message = buildMessage(conversation, n.when, n.tickerText, n.extras.getCharSequence(EXTRA_TEXT), null);
-			messaging.addMessage(message);
-		} else for (int i = 0, num_messages = car_messages.length; i < num_messages; i ++) {
-			final String text = car_messages[i];
-			final CharSequence n_text = n.extras.getCharSequence(EXTRA_TEXT);
-			if (conversation.getType() == Conversation.TYPE_UNKNOWN && num_messages == 1 && TextUtils.equals(text, n_text))
-				conversation.setType(Conversation.TYPE_DIRECT_MESSAGE);        // Extra chance to detect direct message indistinguishable from bot message.
-			if (i == num_messages - 1 && TextUtils.indexOf(n.tickerText, n_text) >= 0 && TextUtils.indexOf(n.tickerText, text) < 0
-					&& TextUtils.indexOf(text, n_text) < 0) {    // The last check for case: text="[Link] ABC", n_text="ABC" (commonly seen in bot messages)
-				// The last message inside car extender is inconsistent with the outer ticker and content text, it should be a reply sent by the user.
-				messaging.addMessage(buildMessage(conversation, 0, n.tickerText, n_text, null));
-				messaging.addMessage(buildMessage(conversation, 0, null, text, ""/* special mark for "self" */));
-			} else messaging.addMessage(buildMessage(conversation, 0, i == num_messages - 1 ? n.tickerText : null, text, null));
-		}
+		final Message[] messages = WeChatMessage.buildFromCarConversation(conversation, convs);
+		for (final Message message : messages) messaging.addMessage(message);
 
 		final PendingIntent on_read = convs.getReadPendingIntent();
 		if (on_read != null) mMarkReadPendingIntents.put(sbn.getKey(), on_read);	// Mapped by evolved key,
@@ -185,21 +169,16 @@ class MessagingBuilder {
 			final PendingIntent proxy = proxyDirectReply(sbn, on_reply, remote_input, input_history, null);
 			final RemoteInput.Builder reply_remote_input = new RemoteInput.Builder(remote_input.getResultKey()).addExtras(remote_input.getExtras())
 					.setAllowFreeFormInput(true).setChoices(SmartReply.generateChoices(messaging));
-			final String[] participants = convs.getParticipants();
-			if (participants != null && participants.length > 0) {
-				final StringBuilder label = new StringBuilder();
-				for (final String participant : participants) label.append(',').append(participant);
-				reply_remote_input.setLabel(label.subSequence(1, label.length()));
-			} else reply_remote_input.setLabel(remote_input.getResultKey());
+			final String participant = convs.getParticipant();	// No need to getParticipants() due to actually only one participant at most, see CarExtender.Builder().
+			if (participant != null) reply_remote_input.setLabel(participant);
 
 			final Action.Builder reply_action = new Action.Builder(null, mContext.getString(R.string.action_reply), proxy)
 					.addRemoteInput(reply_remote_input.build()).setAllowGeneratedReplies(true);
 			if (SDK_INT >= P) reply_action.setSemanticAction(Action.SEMANTIC_ACTION_REPLY);
 			n.addAction(reply_action.build());
 
-			if (conversation.getType() == Conversation.TYPE_GROUP_CHAT) {
-				final List<Message> messages = messaging.getMessages();
-				final Person last_sender = messages.get(messages.size() - 1).getPerson();
+			if (conversation.isGroupChat()) {
+				final Person last_sender = messages[messages.length - 1].getPerson();
 				if (last_sender != null && last_sender != mUserSelf) {
 					final String label = "@" + last_sender.getName(), prefix = "@" + Conversation.getOriginalName(last_sender) + MENTION_SEPARATOR;
 					n.addAction(new Action.Builder(null, label, proxyDirectReply(sbn, on_reply, remote_input, input_history, prefix))
@@ -224,7 +203,7 @@ class MessagingBuilder {
 
 		final Person person;
 		if (sender != null && sender.isEmpty()) person = null;		// Empty string as a special mark for "self"
-		else if (conversation.getType() == Conversation.TYPE_GROUP_CHAT) {
+		else if (conversation.isGroupChat()) {
 			final String ticker_sender = ticker != null ? extractSenderFromText(ticker) : null;	// Group nick is used in ticker and content text, while original nick in sender.
 			person = sender == null ? null : conversation.getGroupParticipant(sender, ticker_sender != null ? ticker_sender : sender);
 		} else person = conversation.sender;

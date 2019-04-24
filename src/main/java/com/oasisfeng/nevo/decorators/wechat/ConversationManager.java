@@ -35,6 +35,10 @@ class ConversationManager {
 
 		final int id;
 		@Nullable String key;
+		int count;
+		CharSequence summary;
+		CharSequence ticker;
+		long timestamp;
 		Person sender = SENDER_PLACEHOLDER;
 
 		int getType() { return mType; }
@@ -50,6 +54,8 @@ class ConversationManager {
 			return previous_type;
 		}
 
+		boolean isGroupChat() { return mType == TYPE_GROUP_CHAT; }
+
 		CharSequence getTitle() { return mTitle; }
 
 		void setTitle(final CharSequence title) {
@@ -59,7 +65,7 @@ class ConversationManager {
 		}
 
 		Person getGroupParticipant(final String key, final String name) {
-			if (mType != TYPE_GROUP_CHAT) throw new IllegalStateException("Not group chat");
+			if (! isGroupChat()) throw new IllegalStateException("Not group chat");
 			Person.Builder builder = null;
 			Person participant = mParticipants.get(key);
 			if (participant == null) builder = new Person.Builder().setKey(key);
