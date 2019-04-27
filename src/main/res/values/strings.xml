@@ -16,30 +16,30 @@
   -->
 
 <resources>
-    <string name="decorator_wechat_label">Nevo - IM Modernized (WeChat)</string>
-    <string name="decorator_wechat_title">WeChat Modernized</string>
-    <string name="decorator_wechat_description">Enhance notifications with expandable conversation, direct reply, swipe to mark read and more.</string>
-    <string name="self_display_name">You</string>
-    <string name="action_reply">Reply</string>
-    <string name="action_preview_image">Preview Image</string>
+    <string name="decorator_wechat_label">女娲石 - 即时通信增强（微信）</string>
+    <string name="decorator_wechat_title">微信通知 - 现代简约风</string>
+    <string name="decorator_wechat_description">符合当代 Android 的最佳通知体验：可展开的会话样式、直接回复、划除即已读等高级特性。</string>
+    <string name="self_display_name">你</string>
+    <string name="action_reply">回复</string>
+    <string name="action_preview_image">预览图片</string>
 
-    <string name="channel_message">Message Notification</string>
-    <string name="channel_group_message">Group Conversation Notification</string>
-    <string name="channel_misc">Other Notification</string>
+    <string name="channel_message">新消息通知</string>
+    <string name="channel_group_message">新群组消息通知</string>
+    <string name="channel_misc">其它通知</string>
 
     <!-- Settings -->
 
-    <string name="pref_activate_title">Activate</string>
-    <string name="pref_activate_summary_wechat_not_installed">\"WeChat\" is not installed</string>
-    <string name="pref_activate_summary_nevo_not_installed">Nevolution is not installed yet</string>
-    <string name="pref_activate_summary_already_activated">Already activated</string>
-    <string name="pref_extension_title">Extension pack</string>
-    <string name="pref_extension_summary">Add more features (direct reply, swipe to mark read and etc)</string>
-    <string name="pref_extension_summary_auto">\"Android Auto\" is required to support more features (direct reply, swipe to mark read and etc).</string>
-    <string name="pref_extension_summary_installed">Installed</string>
-    <string name="pref_mention_action_title">Add @mention action (beta)</string>
-    <string name="pref_mention_action_summary">An extra direct reply action to mention the last participant in group chat.\nBeware, this will *NOT* trigger alert for mentioned participant as the mention sent in WeChat conversation UI.</string>
-    <string name="pref_wear_title">Wear OS (beta)</string>
-    <string name="pref_wear_summary">Sync notifications to Wear OS devices.</string>
-    <string name="pref_version_title">Version</string>
+    <string name="pref_activate_title">启用</string>
+    <string name="pref_activate_summary_wechat_not_installed">“微信”未安装</string>
+    <string name="pref_activate_summary_nevo_not_installed">“女娲石”尚未安装</string>
+    <string name="pref_activate_summary_already_activated">已启用</string>
+    <string name="pref_extension_title">扩展包</string>
+    <string name="pref_extension_summary">添加更多特性（快捷回复、划掉标记已读 等）</string>
+    <string name="pref_extension_summary_auto">需要安装“Android Auto”以支持更多特性（快捷回复、划掉标记已读 等）</string>
+    <string name="pref_extension_summary_installed">已安装</string>
+    <string name="pref_mention_action_title">添加 @提及 式快捷回复</string>
+    <string name="pref_mention_action_summary">额外的快捷回复操作，提及群聊中的最后发言者。\n注意，受微信的接口限制，这 *不会* 像在微信聊天界面中的提及动作那样触发对方的提醒。</string>
+    <string name="pref_wear_title">Wear OS (实验性)</string>
+    <string name="pref_wear_summary">同步通知至 Wear OS 设备</string>
+    <string name="pref_version_title">版本</string>
 </resources>
