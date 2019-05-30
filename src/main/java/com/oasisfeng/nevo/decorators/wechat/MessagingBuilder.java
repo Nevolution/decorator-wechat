@@ -87,12 +87,14 @@ class MessagingBuilder {
 			return null;
 		}
 
-		final LongSparseArray<CharSequence> lines = new LongSparseArray<>(MAX_NUM_HISTORICAL_LINES);
+		final LongSparseArray<CharSequence> tickerArray = new LongSparseArray<>(MAX_NUM_HISTORICAL_LINES);
+		final LongSparseArray<CharSequence> textArray = new LongSparseArray<>(MAX_NUM_HISTORICAL_LINES);
 		CharSequence text;
 		int count = 0, num_lines_with_colon = 0;
 		final String redundant_prefix = title.toString() + SENDER_MESSAGE_SEPARATOR;
 		for (final StatusBarNotification each : archive) {
 			final Notification notification = each.getNotification();
+            tickerArray.put(notification.when, notification.tickerText);
 			final Bundle its_extras = notification.extras;
 			final CharSequence its_title = its_extras.getCharSequence(Notification.EXTRA_TITLE);
 			if (! title.equals(its_title)) {
@@ -111,27 +113,28 @@ class MessagingBuilder {
 				if (trimmed_text.toString().startsWith(redundant_prefix))	// Remove redundant prefix
 					trimmed_text = trimmed_text.subSequence(redundant_prefix.length(), trimmed_text.length());
 				else if (trimmed_text.toString().indexOf(SENDER_MESSAGE_SEPARATOR) > 0) num_lines_with_colon ++;
-				lines.put(notification.when, trimmed_text);
+				textArray.put(notification.when, trimmed_text);
 			} else {
 				count = 1;
-				lines.put(notification.when, text = its_text);
+				textArray.put(notification.when, text = its_text);
 				if (text.toString().indexOf(SENDER_MESSAGE_SEPARATOR) > 0) num_lines_with_colon ++;
 			}
 		}
 		n.number = count;
-		if (lines.size() == 0) {
+		if (textArray.size() == 0) {
 			Log.w(TAG, "No lines extracted, expected " + count);
 			return null;
 		}
 
 		final MessagingStyle messaging = new MessagingStyle(mUserSelf);
-		final boolean sender_inline = num_lines_with_colon == lines.size();
-		for (int i = 0, size = lines.size(); i < size; i++)			// All lines have colon in text
-			messaging.addMessage(buildMessage(conversation, lines.keyAt(i), n.tickerText, lines.valueAt(i), sender_inline ? null : title.toString()));
+		final boolean sender_inline = num_lines_with_colon == textArray.size();
+		for (int i = 0, size = textArray.size(); i < size; i++)	{		// All lines have colon in text
+			messaging.addMessage(buildMessage(conversation, textArray.keyAt(i), tickerArray.valueAt(i), textArray.valueAt(i), sender_inline ? null : title.toString()));
+        }
 		return messaging;
 	}
 
-	@Nullable MessagingStyle buildFromExtender(final Conversation conversation, final MutableStatusBarNotification sbn) {
+	@Nullable MessagingStyle buildFromExtender(final Conversation conversation, final MutableStatusBarNotification sbn, final CharSequence title, final List<StatusBarNotification> archive) {
 		final MutableNotification n = sbn.getNotification();
 		final Notification.CarExtender extender = new Notification.CarExtender(n);
 		final CarExtender.UnreadConversation convs = extender.getUnreadConversation();
@@ -156,9 +159,8 @@ class MessagingBuilder {
 			Log.e(TAG, "Error parsing reply intent.", e);
 		}
 
-		final MessagingStyle messaging = new MessagingStyle(mUserSelf);
-		final Message[] messages = WeChatMessage.buildFromCarConversation(conversation, convs);
-		for (final Message message : messages) messaging.addMessage(message);
+        final MessagingStyle messaging = buildFromArchive(conversation, n, title, archive);
+        final List<Message> messages = messaging.getMessages();
 
 		final PendingIntent on_read = convs.getReadPendingIntent();
 		if (on_read != null) mMarkReadPendingIntents.put(sbn.getKey(), on_read);	// Mapped by evolved key,
@@ -178,7 +180,7 @@ class MessagingBuilder {
 			n.addAction(reply_action.build());
 
 			if (conversation.isGroupChat() && mPreferences.getBoolean(mPrefKeyMentionAction, false)) {
-				final Person last_sender = messages[messages.length - 1].getPerson();
+				final Person last_sender = messages.get(messages.size() - 1).getPerson();
 				if (last_sender != null && last_sender != mUserSelf) {
 					final String label = "@" + last_sender.getName(), prefix = "@" + Conversation.getOriginalName(last_sender) + MENTION_SEPARATOR;
 					n.addAction(new Action.Builder(null, label, proxyDirectReply(sbn, on_reply, remote_input, input_history, prefix))
