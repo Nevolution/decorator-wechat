@@ -16,3 +16,5 @@ build
 .DS_Store
 
 proguard-rules.pro
+adb
+*.apk
