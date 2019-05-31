@@ -96,7 +96,7 @@ class MessagingBuilder {
 			final Notification notification = each.getNotification();
             tickerArray.put(notification.when, notification.tickerText);
 			final Bundle its_extras = notification.extras;
-			final CharSequence its_title = its_extras.getCharSequence(Notification.EXTRA_TITLE);
+			final CharSequence its_title = EmojiTranslator.translate(its_extras.getCharSequence(Notification.EXTRA_TITLE));
 			if (! title.equals(its_title)) {
 				Log.d(TAG, "Skip other conversation with the same key in archive: " + its_title);	// ID reset by WeChat due to notification removal in previous evolving
 				continue;

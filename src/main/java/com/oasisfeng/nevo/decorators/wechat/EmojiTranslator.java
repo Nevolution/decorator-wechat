@@ -17,8 +17,10 @@ public class EmojiTranslator {
 	private static final Map<String, String> ENGLISH_MAP = new HashMap<>(EmojiMap.MAP.length);
 	static {
 		for (final String[] entry : EmojiMap.MAP) {
-			CHINESE_MAP.put(entry[0], entry[2]);
-			ENGLISH_MAP.put(entry[1], entry[2]);
+            if (entry[0] != null)
+    			CHINESE_MAP.put(entry[0], entry[2]);
+            if (entry[1] != null)
+	    		ENGLISH_MAP.put(entry[1], entry[2]);
 		}
 	}
 
