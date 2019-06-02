@@ -2,11 +2,13 @@ package com.oasisfeng.nevo.decorators.wechat;
 
 import android.text.TextUtils;
 import android.util.ArrayMap;
+import android.util.Log;
 import android.util.SparseArray;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
@@ -32,6 +34,7 @@ class ConversationManager {
 		@IntDef({ TYPE_UNKNOWN, TYPE_DIRECT_MESSAGE, TYPE_GROUP_CHAT, TYPE_BOT_MESSAGE }) @Retention(RetentionPolicy.SOURCE) @interface ConversationType {}
 
 		private static final String SCHEME_ORIGINAL_NAME = "ON:";
+		private static final Pattern pattern = Pattern.compile("^[a-zA-Z0-9\\u4e00-\\u9fa5]");
 
 		final int id;
 		@Nullable String key;
@@ -71,7 +74,16 @@ class ConversationManager {
 			if (participant == null) builder = new Person.Builder().setKey(key);
 			else if (! TextUtils.equals(name, requireNonNull(participant.getUri()).substring(SCHEME_ORIGINAL_NAME.length())))	// Original name is changed
 				builder = participant.toBuilder();
-			if (builder != null) mParticipants.put(key, participant = builder.setUri(SCHEME_ORIGINAL_NAME + name).setName(EmojiTranslator.translate(name)).build());
+			if (builder != null) {
+				final CharSequence n = EmojiTranslator.translate(name);
+				builder.setUri(SCHEME_ORIGINAL_NAME + name);
+				if (pattern.matcher(n).find()) {
+					builder.setName(n);
+				} else {
+					builder.setName("\u200b" + n);
+				}
+				mParticipants.put(key, participant = builder.build());
+			}
 			return participant;
 		}
 
@@ -94,4 +106,5 @@ class ConversationManager {
 	}
 
 	private final SparseArray<Conversation> mConversations = new SparseArray<>();
+	private static final String TAG = WeChatDecorator.TAG;
 }

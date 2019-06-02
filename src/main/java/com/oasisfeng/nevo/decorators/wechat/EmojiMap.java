@@ -13,8 +13,12 @@ public class EmojiMap {
 	// Pull Request is welcome. (columns are split by "tab" for visual alignment)
 	// Proper emoji is needed for commented lines.
 	static final String[][] MAP = new String[][] {
-            { "表情",       null,           "㊙️" },
-            { "链接",       null,           "🔗" },
+			{ "表情",       null,           "㊙️" },
+			{ "链接",       null,           "🔗" },
+			{ "花",         null,           "🌺" },
+			{ "钱",         null,           "💰" },
+			{ "闪烁",       null,           "✨" },
+			{ "X",          "X",           "❌" },
 			{ "OK",			"OK",			"👌" },
 			{ "耶",			"Yeah!",		"✌" },
 			{ "嘘",			"Silent",		"🤫" },
@@ -114,7 +118,7 @@ public class EmojiMap {
 //			{ "机智",		"Smart",		"" },
 //			{ "抠鼻",		"DigNose",		"" },
 //			{ "可怜",		"Whimper",		"" },
-            { "皇冠",       null,           "👑" },
+			{ "皇冠",       null,           "👑" },
 			{ "快哭了",		"Puling",		"😔" },
 //			{ "左哼哼",		"Bah！L",		"" },
 //			{ "右哼哼",		"Bah！R",		"" },

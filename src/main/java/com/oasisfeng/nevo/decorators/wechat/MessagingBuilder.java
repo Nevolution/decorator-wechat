@@ -94,7 +94,7 @@ class MessagingBuilder {
 		final String redundant_prefix = title.toString() + SENDER_MESSAGE_SEPARATOR;
 		for (final StatusBarNotification each : archive) {
 			final Notification notification = each.getNotification();
-            tickerArray.put(notification.when, notification.tickerText);
+			tickerArray.put(notification.when, notification.tickerText);
 			final Bundle its_extras = notification.extras;
 			final CharSequence its_title = EmojiTranslator.translate(its_extras.getCharSequence(Notification.EXTRA_TITLE));
 			if (! title.equals(its_title)) {
@@ -130,7 +130,7 @@ class MessagingBuilder {
 		final boolean sender_inline = num_lines_with_colon == textArray.size();
 		for (int i = 0, size = textArray.size(); i < size; i++)	{		// All lines have colon in text
 			messaging.addMessage(buildMessage(conversation, textArray.keyAt(i), tickerArray.valueAt(i), textArray.valueAt(i), sender_inline ? null : title.toString()));
-        }
+		}
 		return messaging;
 	}
 
@@ -159,8 +159,8 @@ class MessagingBuilder {
 			Log.e(TAG, "Error parsing reply intent.", e);
 		}
 
-        final MessagingStyle messaging = buildFromArchive(conversation, n, title, archive);
-        final List<Message> messages = messaging.getMessages();
+		final MessagingStyle messaging = buildFromArchive(conversation, n, title, archive);
+		final List<Message> messages = messaging.getMessages();
 
 		final PendingIntent on_read = convs.getReadPendingIntent();
 		if (on_read != null) mMarkReadPendingIntents.put(sbn.getKey(), on_read);	// Mapped by evolved key,
@@ -358,8 +358,7 @@ class MessagingBuilder {
 	}
 
 	private static Person buildPersonFromProfile(final Context context) {
-		return new Person.Builder().setName(context.getString(R.string.self_display_name))
-				.setIcon(IconCompat.createWithContentUri(Uri.withAppendedPath(Profile.CONTENT_URI, Contacts.Photo.DISPLAY_PHOTO))).build();
+		return new Person.Builder().setName(context.getString(R.string.self_display_name)).build();
 	}
 
 	void close() {
