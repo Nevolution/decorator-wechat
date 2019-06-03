@@ -37,7 +37,6 @@ import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat.MessagingStyle;
 import androidx.core.app.NotificationCompat.MessagingStyle.Message;
 import androidx.core.app.Person;
-import androidx.core.graphics.drawable.IconCompat;
 
 import static android.app.Notification.EXTRA_REMOTE_INPUT_HISTORY;
 import static android.app.Notification.EXTRA_TEXT;
@@ -159,8 +158,9 @@ class MessagingBuilder {
 			Log.e(TAG, "Error parsing reply intent.", e);
 		}
 
-		final MessagingStyle messaging = buildFromArchive(conversation, n, title, archive);
-		final List<Message> messages = messaging.getMessages();
+		final MessagingStyle messaging = new MessagingStyle(mUserSelf);
+		final Message[] messages = WeChatMessage.buildFromCarConversation(conversation, convs, archive);
+		for (final Message message : messages) messaging.addMessage(message);
 
 		final PendingIntent on_read = convs.getReadPendingIntent();
 		if (on_read != null) mMarkReadPendingIntents.put(sbn.getKey(), on_read);	// Mapped by evolved key,
@@ -180,7 +180,7 @@ class MessagingBuilder {
 			n.addAction(reply_action.build());
 
 			if (conversation.isGroupChat() && mPreferences.getBoolean(mPrefKeyMentionAction, false)) {
-				final Person last_sender = messages.get(messages.size() - 1).getPerson();
+				final Person last_sender = messages[messages.length - 1].getPerson();
 				if (last_sender != null && last_sender != mUserSelf) {
 					final String label = "@" + last_sender.getName(), prefix = "@" + Conversation.getOriginalName(last_sender) + MENTION_SEPARATOR;
 					n.addAction(new Action.Builder(null, label, proxyDirectReply(sbn, on_reply, remote_input, input_history, prefix))
