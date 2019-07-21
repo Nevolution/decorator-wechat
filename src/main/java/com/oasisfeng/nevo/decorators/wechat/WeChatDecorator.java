@@ -45,6 +45,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import androidx.annotation.ColorInt;
@@ -71,7 +72,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	public static final String WECHAT_PACKAGE = "com.tencent.mm";
 	private static final int MAX_NUM_ARCHIVED = 20;
-	private static final long GROUP_CHAT_SORT_KEY_SHIFT = 24 * 60 * 60 * 1000L;			// Sort group chat like one day older message.
 	private static final String CHANNEL_MESSAGE = "message_channel_new_id";				// Channel ID used by WeChat for all message notifications
 	private static final String OLD_CHANNEL_MESSAGE = "message";						//   old name for migration
 	private static final String CHANNEL_MISC = "reminder_channel_id";					// Channel ID used by WeChat for misc. notifications
@@ -83,7 +83,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private static final @ColorInt int LIGHT_COLOR = 0xFF00FF00;
 	static final String ACTION_SETTINGS_CHANGED = "SETTINGS_CHANGED";
 	static final String ACTION_DEBUG_NOTIFICATION = "DEBUG";
-	private static final String KEY_SILENT_REVIVAL = "nevo.wechat.revival";
 
 	@Override public void apply(final MutableStatusBarNotification evolving) {
 		final MutableNotification n = evolving.getNotification();
@@ -131,12 +130,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 		extras.putBoolean(Notification.EXTRA_SHOW_WHEN, true);
 		if (mPreferences.getBoolean(mPrefKeyWear, false)) n.flags &= ~ Notification.FLAG_LOCAL_ONLY;
-		n.setSortKey(String.valueOf(Long.MAX_VALUE - n.when + (is_group_chat ? GROUP_CHAT_SORT_KEY_SHIFT : 0))); // Place group chat below other messages
 		if (SDK_INT >= O) {
-			if (extras.containsKey(KEY_SILENT_REVIVAL)) {
-				n.setGroup("nevo.group.auto");	// Special group name to let Nevolution auto-group it as if not yet grouped. (To be standardized in SDK)
-				n.setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY);		// This trick makes notification silent
-			}
 			if (is_group_chat && ! CHANNEL_DND.equals(channel_id)) n.setChannelId(CHANNEL_GROUP_CONVERSATION);
 			else if (channel_id == null) n.setChannelId(CHANNEL_MESSAGE);		// WeChat versions targeting O+ have its own channel for message
 		}
@@ -177,17 +171,10 @@ public class WeChatDecorator extends NevoDecoratorService {
 			Log.d(TAG, "Cancel notification: " + key);
 			cancelNotification(key);	// Will cancel all notifications evolved from this original key, thus trigger the "else" branch below
 		} else if (reason == REASON_CHANNEL_BANNED) {	// In case WeChat deleted our notification channel for group conversation in Insider delivery mode
-			mHandler.post(() -> reviveNotificationAfterChannelDeletion(key));
+			mHandler.post(() -> reviveNotification(key));
 		} else if (SDK_INT < O || reason == REASON_CANCEL) {	// Exclude the removal request by us in above case. (Removal-Aware is only supported on Android 8+)
 			mMessagingBuilder.markRead(key);
 		}
-	}
-
-	private void reviveNotificationAfterChannelDeletion(final String key) {
-		Log.d(TAG, ("Revive silently: ") + key);
-		final Bundle addition = new Bundle();
-		addition.putBoolean(KEY_SILENT_REVIVAL, true);
-		recastNotification(key, addition);
 	}
 
 	@Override protected void onConnected() {
@@ -283,7 +270,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 				if (n.tickerText != null) n.extras.putCharSequence(Notification.EXTRA_BIG_TEXT, n.extras.getCharSequence(EXTRA_TEXT) + "\n" + n.tickerText);
 				n.extras.putString(Notification.EXTRA_TEMPLATE, Notification.BigTextStyle.class.getName());
 			}
-			final NotificationManager nm = getSystemService(NotificationManager.class);
+			final NotificationManager nm = Objects.requireNonNull(getSystemService(NotificationManager.class));
 			nm.createNotificationChannel(new NotificationChannel(n.getChannelId(), "Debug:" + n.getChannelId(), NotificationManager.IMPORTANCE_LOW));
 			nm.notify(tag, id, n);
 		} catch (final PackageManager.NameNotFoundException | RuntimeException e) {
