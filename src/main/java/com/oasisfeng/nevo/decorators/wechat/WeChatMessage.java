@@ -116,7 +116,7 @@ class WeChatMessage {
 			// The content without unread count prefix, may or may not start with sender nick
 			final CharSequence message = pos > 0 && content.charAt(0) == '[' ? content.subSequence(pos, content.length()) : content;
 			// message.startsWith(title + SENDER_MESSAGE_SEPARATOR)
-			if (startsWith(message, conversation.getTitle(), SENDER_MESSAGE_SEPARATOR))		// The title of group chat is group name, not the message sender
+			if (startsWith(message, conversation.title, SENDER_MESSAGE_SEPARATOR))		// The title of group chat is group name, not the message sender
 				return Conversation.TYPE_DIRECT_MESSAGE;	// Most probably a direct message with more than 1 unread
 			return Conversation.TYPE_GROUP_CHAT;
 		} else if (TextUtils.indexOf(ticker, content) >= 0) {
@@ -135,7 +135,7 @@ class WeChatMessage {
 		final int pos = from_self ? 0 : TextUtils.indexOf(message, SENDER_MESSAGE_SEPARATOR);
 		if (pos > 0) {
 			sender = message.substring(0, pos);
-			final boolean title_as_sender = TextUtils.equals(sender, conversation.getTitle());
+			final boolean title_as_sender = TextUtils.equals(sender, conversation.title);
 			if (conversation.isGroupChat() || title_as_sender) {	// Verify the sender with title for non-group conversation
 				text = message.substring(pos + SENDER_MESSAGE_SEPARATOR.length());
 				if (conversation.isGroupChat() && title_as_sender) sender = SELF;		// WeChat incorrectly use group chat title as sender for self-sent messages.
@@ -145,7 +145,7 @@ class WeChatMessage {
 	}
 
 	private Message toMessage() {
-		final Person person = SELF.equals(sender) ? null : conversation.isGroupChat() ? conversation.getGroupParticipant(sender, nick) : conversation.sender;
+		final Person person = SELF.equals(sender) ? null : conversation.isGroupChat() ? conversation.getGroupParticipant(sender, nick) : conversation.sender().build();
 		return new Message(text, time, person);
 	}
 

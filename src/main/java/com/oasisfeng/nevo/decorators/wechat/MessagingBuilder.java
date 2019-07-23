@@ -196,7 +196,7 @@ class MessagingBuilder {
 			sender = extractSenderFromText(text);
 			if (sender != null) {
 				actual_text = text.subSequence(sender.length() + SENDER_MESSAGE_SEPARATOR.length(), text.length());
-				if (TextUtils.equals(conversation.getTitle(), sender)) sender = null;		// In this case, the actual sender is user itself.
+				if (TextUtils.equals(conversation.title, sender)) sender = null;		// In this case, the actual sender is user itself.
 			}
 		}
 		actual_text = EmojiTranslator.translate(actual_text);
@@ -206,7 +206,7 @@ class MessagingBuilder {
 		else if (conversation.isGroupChat()) {
 			final String ticker_sender = ticker != null ? extractSenderFromText(ticker) : null;	// Group nick is used in ticker and content text, while original nick in sender.
 			person = sender == null ? null : conversation.getGroupParticipant(sender, ticker_sender != null ? ticker_sender : sender);
-		} else person = conversation.sender;
+		} else person = conversation.sender().build();
 		return new Message(actual_text, when, person);
 	}
 

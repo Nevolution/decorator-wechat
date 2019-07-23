@@ -9,8 +9,10 @@ import java.lang.annotation.RetentionPolicy;
 import java.util.Map;
 
 import androidx.annotation.IntDef;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.Person;
+import androidx.core.graphics.drawable.IconCompat;
 
 import static java.util.Objects.requireNonNull;
 
@@ -36,10 +38,12 @@ class ConversationManager {
 		final int id;
 		@Nullable String key;
 		int count;
+		CharSequence title;
 		CharSequence summary;
 		CharSequence ticker;
 		long timestamp;
-		Person sender = SENDER_PLACEHOLDER;
+		IconCompat icon;
+		private @Nullable Person.Builder sender;
 
 		int getType() { return mType; }
 
@@ -48,21 +52,28 @@ class ConversationManager {
 			if (type == mType) return type;
 			final int previous_type = mType;
 			mType = type;
-			sender = type == TYPE_UNKNOWN || type == TYPE_GROUP_CHAT ? SENDER_PLACEHOLDER
-					: sender.toBuilder().setKey(key).setBot(type == TYPE_BOT_MESSAGE).build();	// Always set key as it may change
+			sender = type == TYPE_UNKNOWN || type == TYPE_GROUP_CHAT ? null : sender().setKey(key).setBot(type == TYPE_BOT_MESSAGE);	// Always set key as it may change
 			if (type != TYPE_GROUP_CHAT) mParticipants.clear();
 			return previous_type;
 		}
 
-		boolean isGroupChat() { return mType == TYPE_GROUP_CHAT; }
-
-		CharSequence getTitle() { return mTitle; }
-
-		void setTitle(final CharSequence title) {
-			if (TextUtils.equals(title, mTitle)) return;
-			mTitle = title;
-			sender = sender.toBuilder().setName(title).build();		// Rename the sender
+		@NonNull Person.Builder sender() {
+			return sender != null ? sender : new Person.Builder() { @NonNull @Override public Person build() {
+				switch (mType) {
+				case TYPE_GROUP_CHAT:
+					return SENDER_PLACEHOLDER;
+				case TYPE_BOT_MESSAGE:
+					setBot(true);	// Fall-through
+				case TYPE_UNKNOWN:
+				case TYPE_DIRECT_MESSAGE:
+					setIcon(icon).setName(title != null ? title : " ");		// Cannot be empty string, or it will be treated as null.
+					break;
+				}
+				return super.build();
+			}};
 		}
+
+		boolean isGroupChat() { return mType == TYPE_GROUP_CHAT; }
 
 		Person getGroupParticipant(final String key, final String name) {
 			if (! isGroupChat()) throw new IllegalStateException("Not group chat");
@@ -83,7 +94,6 @@ class ConversationManager {
 		Conversation(final int id) { this.id = id; }
 
 		@ConversationType private int mType;
-		private CharSequence mTitle;
 		private final Map<String, Person> mParticipants = new ArrayMap<>();
 	}
 

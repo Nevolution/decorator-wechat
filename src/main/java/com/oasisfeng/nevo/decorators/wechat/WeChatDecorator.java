@@ -26,6 +26,7 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.graphics.drawable.Icon;
 import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Bundle;
@@ -53,6 +54,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.StringRes;
 import androidx.core.app.NotificationCompat.MessagingStyle;
+import androidx.core.graphics.drawable.IconCompat;
 
 import static android.app.Notification.EXTRA_TEXT;
 import static android.app.Notification.EXTRA_TITLE;
@@ -120,7 +122,9 @@ public class WeChatDecorator extends NevoDecoratorService {
 			conversation = mConversationManager.getConversation(title_hash);
 		} else conversation = mConversationManager.getConversation(evolving.getOriginalId());
 
-		conversation.setTitle(title);
+		final Icon icon = n.getLargeIcon();
+		conversation.icon = icon != null ? IconCompat.createFromIcon(this, icon) : null;
+		conversation.title = title;
 		conversation.summary = content_text;
 		conversation.ticker = n.tickerText;
 		conversation.timestamp = n.when;
