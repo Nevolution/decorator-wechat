@@ -51,6 +51,7 @@ import static androidx.core.app.NotificationCompat.EXTRA_IS_GROUP_CONVERSATION;
 import static androidx.core.app.NotificationCompat.EXTRA_MESSAGES;
 import static androidx.core.app.NotificationCompat.EXTRA_SELF_DISPLAY_NAME;
 import static com.oasisfeng.nevo.decorators.wechat.WeChatMessage.SENDER_MESSAGE_SEPARATOR;
+import static java.util.Objects.requireNonNull;
 
 /**
  * Build the modernized {@link MessagingStyle} for WeChat conversation.
@@ -143,13 +144,15 @@ class MessagingBuilder {
 		if (conversation.key == null) try {
 			if (on_reply != null) on_reply.send(mContext, 0, null, (p, intent, r, d, b) -> {
 				final String key = conversation.key = intent.getStringExtra(KEY_USERNAME);	// setType() below will trigger rebuilding of conversation sender.
+				if (key == null) return;
 				final int detected_type = key.endsWith("@chatroom") || key.endsWith("@im.chatroom"/* WeWork */)
 						? Conversation.TYPE_GROUP_CHAT : key.startsWith("gh_") ? Conversation.TYPE_BOT_MESSAGE : Conversation.TYPE_DIRECT_MESSAGE;
 				final int previous_type = conversation.setType(detected_type);
 				if (BuildConfig.DEBUG && SDK_INT >= O && previous_type != Conversation.TYPE_UNKNOWN && detected_type != previous_type) {
 					final Notification clone = n.clone();
-					final Notification.Builder dn = Notification.Builder.recoverBuilder(mContext, clone).setStyle(null).setSubText(clone.tickerText);
-					mContext.getSystemService(NotificationManager.class).notify(key.hashCode(), dn.setChannelId(n.getChannelId()).build());
+					final Notification.Builder dn = Notification.Builder.recoverBuilder(mContext, clone)
+							.setStyle(new Notification.BigTextStyle().bigText(clone.tickerText)).setSubText("Type " + detected_type + " << " + previous_type);
+					requireNonNull(mContext.getSystemService(NotificationManager.class)).notify(key.hashCode(), dn.setChannelId(n.getChannelId()).build());
 				}
 			}, null);
 		} catch (final PendingIntent.CanceledException e) {

@@ -44,6 +44,7 @@
             android:name=".WeChatDecoratorSettingsActivity"
             android:label="@string/decorator_wechat_title"
             android:theme="@android:style/Theme.Material.Light"
+            android:excludeFromRecents="true"
             android:process=":ui">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
