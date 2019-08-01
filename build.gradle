@@ -5,7 +5,7 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.3.2'
+        classpath 'com.android.tools.build:gradle:3.5.0-rc01'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
@@ -20,7 +20,7 @@ repositories {
 if (! project.plugins.hasPlugin("com.android.feature")) apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 28
+    compileSdkVersion 29
 
     defaultConfig {
         minSdkVersion 23
@@ -41,7 +41,7 @@ android {
 }
 
 dependencies {
-    implementation 'com.oasisfeng.nevo:sdk:1.2.0'
+    implementation 'com.oasisfeng.nevo:sdk:2.0.0-rc01'
     implementation 'androidx.core:core:1.0.1'
 
     androidTestImplementation 'androidx.test:runner:1.1.1'

@@ -87,14 +87,14 @@ public class WeChatDecorator extends NevoDecoratorService {
 	static final String ACTION_SETTINGS_CHANGED = "SETTINGS_CHANGED";
 	static final String ACTION_DEBUG_NOTIFICATION = "DEBUG";
 
-	@Override public void apply(final MutableStatusBarNotification evolving) {
+	@Override public boolean apply(final MutableStatusBarNotification evolving) {
 		final MutableNotification n = evolving.getNotification();
 		final Bundle extras = n.extras;
 
 		CharSequence title = extras.getCharSequence(EXTRA_TITLE);
 		if (title == null || title.length() == 0) {
 			Log.e(TAG, "Title is missing: " + evolving);
-			return;
+			return false;
 		}
 		if (title != (title = EmojiTranslator.translate(title))) extras.putCharSequence(EXTRA_TITLE, title);
 		n.color = PRIMARY_COLOR;        // Tint the small icon
@@ -105,10 +105,10 @@ public class WeChatDecorator extends NevoDecoratorService {
 			n.setGroup(GROUP_MISC);		// Avoid being auto-grouped
 			if (! mOngoingCallTweaker.apply(this, evolving.getOriginalKey(), n))
 				Log.d(TAG, "Skip further process for non-conversation notification: " + title);    // E.g. web login confirmation notification.
-			return;
+			return true;
 		}
 		final CharSequence content_text = extras.getCharSequence(EXTRA_TEXT);
-		if (content_text == null) return;
+		if (content_text == null) return true;
 
 		// WeChat previously uses dynamic counter starting from 4097 as notification ID, which is reused after cancelled by WeChat itself,
 		//   causing conversation duplicate or overwritten notifications.
@@ -140,9 +140,9 @@ public class WeChatDecorator extends NevoDecoratorService {
 		MessagingStyle messaging = mMessagingBuilder.buildFromExtender(conversation, evolving);
 		if (messaging == null)	// EXTRA_TEXT will be written in buildFromArchive()
 			messaging = mMessagingBuilder.buildFromArchive(conversation, n, title, getArchivedNotifications(evolving.getOriginalKey(), MAX_NUM_ARCHIVED));
-		if (messaging == null) return;
+		if (messaging == null) return true;
 		final List<MessagingStyle.Message> messages = messaging.getMessages();
-		if (messages.isEmpty()) return;
+		if (messages.isEmpty()) return true;
 
 		if (is_group_chat) messaging.setGroupConversation(true).setConversationTitle(title);
 		MessagingBuilder.flatIntoExtras(messaging, extras);
@@ -150,6 +150,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 		if (SDK_INT >= N && extras.getCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY) != null)
 			n.flags |= Notification.FLAG_ONLY_ALERT_ONCE;		// No more alert for direct-replied notification.
+		return true;
 	}
 
 	private boolean isDistinctId(final Notification n, final String pkg) {
@@ -168,8 +169,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 	}
 	private Boolean mDistinctIdSupported;
 
-	@Override protected void onNotificationRemoved(final String key, final int reason) {
-		if (reason == REASON_APP_CANCEL) {		// Only if "Removal-Aware" of Nevolution is activated
+	@Override protected boolean onNotificationRemoved(final String key, final int reason) {
+		if (reason == REASON_APP_CANCEL) {		// For ongoing notification, or if "Removal-Aware" of Nevolution is activated
 			Log.d(TAG, "Cancel notification: " + key);
 			mOngoingCallTweaker.onNotificationRemoved(key);
 		} else if (reason == REASON_CHANNEL_BANNED) {	// In case WeChat deleted our notification channel for group conversation in Insider delivery mode
@@ -177,6 +178,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		} else if (SDK_INT < O || reason == REASON_CANCEL) {	// Exclude the removal request by us in above case. (Removal-Aware is only supported on Android 8+)
 			mMessagingBuilder.markRead(key);
 		}
+		return false;
 	}
 
 	@Override protected void onConnected() {
