@@ -21,6 +21,7 @@ import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.Log;
 import android.util.LongSparseArray;
+import android.util.Pair;
 
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation;
 import com.oasisfeng.nevo.sdk.MutableNotification;
@@ -88,8 +89,7 @@ class MessagingBuilder {
 			return null;
 		}
 
-		final LongSparseArray<CharSequence> lines = new LongSparseArray<>(MAX_NUM_HISTORICAL_LINES);
-		CharSequence text;
+		final LongSparseArray<Pair<CharSequence/* text */, CharSequence/* ticker */>> lines = new LongSparseArray<>(MAX_NUM_HISTORICAL_LINES);
 		int count = 0, num_lines_with_colon = 0;
 		final String redundant_prefix = title.toString() + SENDER_MESSAGE_SEPARATOR;
 		for (final StatusBarNotification each : archive) {
@@ -112,11 +112,11 @@ class MessagingBuilder {
 				if (trimmed_text.toString().startsWith(redundant_prefix))	// Remove redundant prefix
 					trimmed_text = trimmed_text.subSequence(redundant_prefix.length(), trimmed_text.length());
 				else if (trimmed_text.toString().indexOf(SENDER_MESSAGE_SEPARATOR) > 0) num_lines_with_colon ++;
-				lines.put(notification.when, trimmed_text);
+				lines.put(notification.when, new Pair<>(trimmed_text, notification.tickerText));
 			} else {
 				count = 1;
-				lines.put(notification.when, text = its_text);
-				if (text.toString().indexOf(SENDER_MESSAGE_SEPARATOR) > 0) num_lines_with_colon ++;
+				lines.put(notification.when, new Pair<>(its_text, n.tickerText));
+				if (its_text.toString().indexOf(SENDER_MESSAGE_SEPARATOR) > 0) num_lines_with_colon ++;
 			}
 		}
 		n.number = count;
@@ -127,8 +127,10 @@ class MessagingBuilder {
 
 		final MessagingStyle messaging = new MessagingStyle(mUserSelf);
 		final boolean sender_inline = num_lines_with_colon == lines.size();
-		for (int i = 0, size = lines.size(); i < size; i++)			// All lines have colon in text
-			messaging.addMessage(buildMessage(conversation, lines.keyAt(i), n.tickerText, lines.valueAt(i), sender_inline ? null : title.toString()));
+		for (int i = 0, size = lines.size(); i < size; i ++) {            // All lines have colon in text
+			final Pair<CharSequence, CharSequence> line = lines.valueAt(i);
+			messaging.addMessage(buildMessage(conversation, lines.keyAt(i), line.second, line.first, sender_inline ? null : title.toString()));
+		}
 		return messaging;
 	}
 
