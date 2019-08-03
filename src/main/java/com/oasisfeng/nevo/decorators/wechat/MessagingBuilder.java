@@ -37,7 +37,6 @@ import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat.MessagingStyle;
 import androidx.core.app.NotificationCompat.MessagingStyle.Message;
 import androidx.core.app.Person;
-import androidx.core.graphics.drawable.IconCompat;
 
 import static android.app.Notification.EXTRA_REMOTE_INPUT_HISTORY;
 import static android.app.Notification.EXTRA_TEXT;
@@ -87,14 +86,16 @@ class MessagingBuilder {
 			return null;
 		}
 
-		final LongSparseArray<CharSequence> lines = new LongSparseArray<>(MAX_NUM_HISTORICAL_LINES);
+		final LongSparseArray<CharSequence> tickerArray = new LongSparseArray<>(MAX_NUM_HISTORICAL_LINES);
+		final LongSparseArray<CharSequence> textArray = new LongSparseArray<>(MAX_NUM_HISTORICAL_LINES);
 		CharSequence text;
 		int count = 0, num_lines_with_colon = 0;
 		final String redundant_prefix = title.toString() + SENDER_MESSAGE_SEPARATOR;
 		for (final StatusBarNotification each : archive) {
 			final Notification notification = each.getNotification();
+			tickerArray.put(notification.when, notification.tickerText);
 			final Bundle its_extras = notification.extras;
-			final CharSequence its_title = its_extras.getCharSequence(Notification.EXTRA_TITLE);
+			final CharSequence its_title = EmojiTranslator.translate(its_extras.getCharSequence(Notification.EXTRA_TITLE));
 			if (! title.equals(its_title)) {
 				Log.d(TAG, "Skip other conversation with the same key in archive: " + its_title);	// ID reset by WeChat due to notification removal in previous evolving
 				continue;
@@ -111,27 +112,28 @@ class MessagingBuilder {
 				if (trimmed_text.toString().startsWith(redundant_prefix))	// Remove redundant prefix
 					trimmed_text = trimmed_text.subSequence(redundant_prefix.length(), trimmed_text.length());
 				else if (trimmed_text.toString().indexOf(SENDER_MESSAGE_SEPARATOR) > 0) num_lines_with_colon ++;
-				lines.put(notification.when, trimmed_text);
+				textArray.put(notification.when, trimmed_text);
 			} else {
 				count = 1;
-				lines.put(notification.when, text = its_text);
+				textArray.put(notification.when, text = its_text);
 				if (text.toString().indexOf(SENDER_MESSAGE_SEPARATOR) > 0) num_lines_with_colon ++;
 			}
 		}
 		n.number = count;
-		if (lines.size() == 0) {
+		if (textArray.size() == 0) {
 			Log.w(TAG, "No lines extracted, expected " + count);
 			return null;
 		}
 
 		final MessagingStyle messaging = new MessagingStyle(mUserSelf);
-		final boolean sender_inline = num_lines_with_colon == lines.size();
-		for (int i = 0, size = lines.size(); i < size; i++)			// All lines have colon in text
-			messaging.addMessage(buildMessage(conversation, lines.keyAt(i), n.tickerText, lines.valueAt(i), sender_inline ? null : title.toString()));
+		final boolean sender_inline = num_lines_with_colon == textArray.size();
+		for (int i = 0, size = textArray.size(); i < size; i++)	{		// All lines have colon in text
+			messaging.addMessage(buildMessage(conversation, textArray.keyAt(i), tickerArray.valueAt(i), textArray.valueAt(i), sender_inline ? null : title.toString()));
+		}
 		return messaging;
 	}
 
-	@Nullable MessagingStyle buildFromExtender(final Conversation conversation, final MutableStatusBarNotification sbn) {
+	@Nullable MessagingStyle buildFromExtender(final Conversation conversation, final MutableStatusBarNotification sbn, final CharSequence title, final List<StatusBarNotification> archive) {
 		final MutableNotification n = sbn.getNotification();
 		final Notification.CarExtender extender = new Notification.CarExtender(n);
 		final CarExtender.UnreadConversation convs = extender.getUnreadConversation();
@@ -157,7 +159,7 @@ class MessagingBuilder {
 		}
 
 		final MessagingStyle messaging = new MessagingStyle(mUserSelf);
-		final Message[] messages = WeChatMessage.buildFromCarConversation(conversation, convs);
+		final Message[] messages = WeChatMessage.buildFromCarConversation(conversation, convs, archive);
 		for (final Message message : messages) messaging.addMessage(message);
 
 		final PendingIntent on_read = convs.getReadPendingIntent();
@@ -356,8 +358,7 @@ class MessagingBuilder {
 	}
 
 	private static Person buildPersonFromProfile(final Context context) {
-		return new Person.Builder().setName(context.getString(R.string.self_display_name))
-				.setIcon(IconCompat.createWithContentUri(Uri.withAppendedPath(Profile.CONTENT_URI, Contacts.Photo.DISPLAY_PHOTO))).build();
+		return new Person.Builder().setName(context.getString(R.string.self_display_name)).build();
 	}
 
 	void close() {

@@ -141,7 +141,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 			else if (channel_id == null) n.setChannelId(CHANNEL_MESSAGE);		// WeChat versions targeting O+ have its own channel for message
 		}
 
-		MessagingStyle messaging = mMessagingBuilder.buildFromExtender(conversation, evolving);
+		MessagingStyle messaging = mMessagingBuilder.buildFromExtender(conversation, evolving, title, getArchivedNotifications(evolving.getOriginalKey(), MAX_NUM_ARCHIVED)); // build message from android auto
 		if (messaging == null)	// EXTRA_TEXT will be written in buildFromArchive()
 			messaging = mMessagingBuilder.buildFromArchive(conversation, n, title, getArchivedNotifications(evolving.getOriginalKey(), MAX_NUM_ARCHIVED));
 		if (messaging == null) return;

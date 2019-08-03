@@ -1,10 +1,13 @@
 package com.oasisfeng.nevo.decorators.wechat;
 
 import android.app.Notification;
+import android.service.notification.StatusBarNotification;
 import android.text.TextUtils;
 import android.util.Log;
 
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation;
+
+import java.util.List;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat.MessagingStyle.Message;
@@ -31,17 +34,22 @@ class WeChatMessage {
 	static final String SENDER_MESSAGE_SEPARATOR = ": ";
 	private static final String SELF = "";
 
-	static Message[] buildFromCarConversation(final Conversation conversation, final Notification.CarExtender.UnreadConversation convs) {
+	static Message[] buildFromCarConversation(final Conversation conversation, final Notification.CarExtender.UnreadConversation convs, final List<StatusBarNotification> archive) {
 		final String[] car_messages = convs.getMessages();
 		if (car_messages.length == 0) return new Message[] { buildFromBasicFields(conversation).toMessage() };	// No messages in car conversation
 
 		final WeChatMessage basic_msg = buildFromBasicFields(conversation);
 		final Message[] messages = new Message[car_messages.length];
+		final CharSequence[] tickerArray = new CharSequence[car_messages.length];
+		for (int i = archive.size() - 1, diff = archive.size() - car_messages.length; i >= 0 && i >= diff; i--) {
+			tickerArray[i - diff] =  archive.get(i).getNotification().tickerText;
+		}
 		int end_of_peers = -1;
 		if (! conversation.isGroupChat()) for (end_of_peers = car_messages.length - 1; end_of_peers >= -1; end_of_peers --)
 			if (end_of_peers >= 0 && TextUtils.equals(basic_msg.text, car_messages[end_of_peers])) break;	// Find the actual end line which matches basic fields, in case extra lines are sent by self
-		for (int i = 0, count = car_messages.length; i < count; i ++)
-			messages[i] = buildFromCarMessage(conversation, car_messages[i], end_of_peers >= 0 && i > end_of_peers).toMessage();
+		for (int i = 0, count = car_messages.length; i < count; i ++) {
+			messages[i] = buildFromCarMessage(conversation, car_messages[i], tickerArray[i], end_of_peers >= 0 && i > end_of_peers).toMessage();
+		}
 		return messages;
 	}
 
@@ -130,14 +138,25 @@ class WeChatMessage {
 				&& TextUtils.regionMatches(text, needle1_length, needle2, 0, needle2_length);
 	}
 
-	private static WeChatMessage buildFromCarMessage(final Conversation conversation, final String message, final boolean from_self) {
+	private static WeChatMessage buildFromCarMessage(final Conversation conversation, final String message, final @Nullable CharSequence ticker, final boolean from_self) {
 		String text = message, sender = null;
-		final int pos = from_self ? 0 : TextUtils.indexOf(message, SENDER_MESSAGE_SEPARATOR);
+		int pos;
+		// parse text
+		pos = from_self ? 0 : TextUtils.indexOf(message, SENDER_MESSAGE_SEPARATOR);
 		if (pos > 0) {
 			sender = message.substring(0, pos);
 			final boolean title_as_sender = TextUtils.equals(sender, conversation.getTitle());
 			if (conversation.isGroupChat() || title_as_sender) {	// Verify the sender with title for non-group conversation
 				text = message.substring(pos + SENDER_MESSAGE_SEPARATOR.length());
+				if (conversation.isGroupChat() && title_as_sender) sender = SELF;		// WeChat incorrectly use group chat title as sender for self-sent messages.
+			} else sender = null;		// Not really the sender name, revert the parsing result.
+		}
+		// parse sender (from ticker)
+		pos = from_self ? 0 : TextUtils.indexOf(ticker, SENDER_MESSAGE_SEPARATOR);
+		if (pos > 0) {
+			sender = ticker.toString().substring(0, pos);
+			final boolean title_as_sender = TextUtils.equals(sender, conversation.getTitle());
+			if (conversation.isGroupChat() || title_as_sender) {	// Verify the sender with title for non-group conversation
 				if (conversation.isGroupChat() && title_as_sender) sender = SELF;		// WeChat incorrectly use group chat title as sender for self-sent messages.
 			} else sender = null;		// Not really the sender name, revert the parsing result.
 		}
