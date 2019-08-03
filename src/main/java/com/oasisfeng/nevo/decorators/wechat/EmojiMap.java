@@ -8,10 +8,11 @@ import static android.os.Build.VERSION_CODES.O_MR1;
  *
  * Created by Oasis on 2018-8-9.
  */
-public class EmojiMap {
+class EmojiMap {
 
-	// Pull Request is welcome. (columns are split by "tab" for visual alignment)
-	// Proper emoji is needed for commented lines.
+	// Pull Request is welcome. Please describe how to verify the related emoji in the pull request.
+	// Proper emoji is not found for lines commented out. If you have good candidate, please let us know.
+	// Columns are split by "tab" for visual alignment
 	static final String[][] MAP = new String[][] {
 			{ "OK",			"OK",			"👌" },
 			{ "耶",			"Yeah!",		"✌" },
@@ -103,5 +104,34 @@ public class EmojiMap {
 //			{ "左哼哼",		"Bah！L",		"" },
 //			{ "右哼哼",		"Bah！R",		"" },
 			{ "破涕为笑",	"Lol",			"😂" },
+
+			// From WeChat for iOS
+			{ "强壮",		null,			"💪"},
+			{ "鬼魂",		null,			"👻"},
+
+			// From WeChat for PC
+			{ "篮球",		"Basketball",	"🏀" },
+			{ "乒乓",		"PingPong",		"🏓" },
+			{ "饭",			"Rice",			"🍚" },
+			{ "瓢虫",		"Ladybug",		"🐞" },
+			{ "礼物",		"Gift",			"🎁" },
+//			{ "差劲",		"Pinky",		"" },
+			{ "爱你",		"Love",			"🤟" },
+			{ null,			"NO",			"🙅" },
+			{ "爱情",		"InLove",		"💕" },
+			{ "飞吻",		"Blowkiss",		"😘" },
+			{ "闪电",		"Lightning",	"⚡" },
+			{ "刀",			null,			"🔪" },		// Dup of "Cleaver"
+			{ "足球",		"Soccer",		"⚽" },
+			{ "棒球",		"Baseball",		"⚾" },
+			{ "橄榄球",		"Football",		"🏈" },
+			{ "钱",			"Money",		"💰" },
+			{ "相机",		"Camera",		"📷" },
+			{ "干杯",		"Cheers",		"🍻" },
+			{ "宝石",		"Gem",			"💎" },
+			{ "茶",			"Tea",			"🍵" },
+			{ "药丸",		"Pill",			"💊" },
+			{ "庆祝",		"Party",		"🎆" },
+			{ "火箭",		"Rocket ship",	"🚀" },
 	};
 }

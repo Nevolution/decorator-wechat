@@ -2,16 +2,19 @@ package com.oasisfeng.nevo.decorators.wechat;
 
 import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
+import android.util.Log;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.TAG;
 
 /**
  * Translate Emoji markers to Emoji characters.
  *
  * Created by Oasis on 2018-8-9.
  */
-public class EmojiTranslator {
+class EmojiTranslator {
 
 	private static final Map<String, String> CHINESE_MAP = new HashMap<>(EmojiMap.MAP.length);
 	private static final Map<String, String> ENGLISH_MAP = new HashMap<>(EmojiMap.MAP.length);
@@ -38,7 +41,7 @@ public class EmojiTranslator {
 				if (builder == null) builder = new SpannableStringBuilder(text);
 				builder.replace(bracket_start + offset, bracket_end + 1 + offset, emoji);
 				offset += emoji.length() - marker.length() - 2;
-			}
+			} else if (BuildConfig.DEBUG) Log.d(TAG, "Not translated " + marker + ": " + text);
 			bracket_end = TextUtils.indexOf(text, ']', bracket_end + 3);		// "]...[X..."
 			bracket_start = TextUtils.lastIndexOf(text, '[', bracket_end - 2);
 		}
