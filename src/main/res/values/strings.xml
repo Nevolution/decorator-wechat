@@ -35,11 +35,22 @@
     <string name="pref_activate_summary_already_activated">已启用</string>
     <string name="pref_extension_title">扩展包</string>
     <string name="pref_extension_summary">添加更多特性（快捷回复、划掉标记已读 等）</string>
-    <string name="pref_extension_summary_auto">需要安装“Android Auto”以支持更多特性（快捷回复、划掉标记已读 等）</string>
     <string name="pref_extension_summary_installed">已安装</string>
+    <string name="prompt_extension_install">你有两个选项：安装完整版的 Android Auto（消耗较多空间），或者“极简包”。如果你不需要使用 Android Auto 或者不清楚它是什么，建议选择“极简包”。</string>
+    <string name="action_install_android_auto">安装 Android Auto</string>
+    <string name="action_install_dummy_auto">安装极简包</string>
+    <string name="pref_agent_title">体验增强</string>
+    <string name="pref_agent_summary">通过安装一个替身，可消除女娲石在外源模式下的微信通知前缀，支持启动图标通知圆点，并提供“扫码”的快捷方式。</string>
+    <string name="pref_agent_summary_installed">已安装（点击可切换显示名）</string>
+    <string name="pref_agent_summary_update">有更新版本，请点击这里开始升级。🆕</string>
     <string name="pref_mention_action_title">添加 @提及 式快捷回复</string>
     <string name="pref_mention_action_summary">额外的快捷回复操作，提及群聊中的最后发言者。\n注意，受接口限制，这 *不会* 像在聊天界面中的提及动作那样触发对方的提醒。</string>
     <string name="pref_wear_title">Wear OS (实验性)</string>
     <string name="pref_wear_summary">同步通知至 Wear OS 设备</string>
+    <string name="pref_hide_title">隐藏启动图标</string>
+    <string name="pref_hide_summary">你还可以通过女娲石设置中的插件设置进入这个界面。</string>
+    <string name="pref_open_source_title">开源项目</string>
+    <string name="pref_open_source_summary">欢迎来 GitHub 上访问我们</string>
     <string name="pref_version_title">版本</string>
+    <string name="prompt_hide_prerequisite">隐藏启动图标的前提是从女娲石的插件设置入口进入此界面，这也是图标隐藏后进入此界面的路径。</string>
 </resources>

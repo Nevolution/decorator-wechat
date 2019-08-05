@@ -1,37 +1,49 @@
 package com.oasisfeng.nevo.decorators.wechat;
 
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Bundle;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceManager;
+import android.preference.TwoStatePreference;
 
 import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 
+import java.util.List;
+
 import androidx.annotation.Nullable;
 
+import static android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION;
+import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT;
+import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
+import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
+import static android.content.pm.PackageManager.DONT_KILL_APP;
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.N;
 import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.WECHAT_PACKAGE;
-import static java.util.Objects.requireNonNull;
 
 /**
  * Entry activity. Some ROMs (including Samsung, OnePlus) require a launcher activity to allow any component being bound by other app.
  */
-@SuppressLint("ExportedPreferenceActivity")
+@SuppressWarnings("deprecation") @SuppressLint("ExportedPreferenceActivity")
 public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 
+	private static final int CURRENT_AGENT_VERSION = 1100;
 	private static final String NEVOLUTION_PACKAGE = "com.oasisfeng.nevo";
 	private static final String ANDROID_AUTO_PACKAGE = "com.google.android.projection.gearhead";
+	private static final String AGENT_WECHAT_PACKAGE = "com.oasisfeng.nevo.agents.wechat";
 	private static final String PLAY_STORE_PACKAGE = "com.android.vending";
 	private static final String APP_MARKET_PREFIX = "market://details?id=";
 
@@ -45,14 +57,15 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 
 	@Override protected void onResume() {
 		super.onResume();
+		final PackageManager pm = getPackageManager();
 		PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(mPreferencesChangeListener);
 
-		@SuppressWarnings("deprecation") final Preference preference_activate = findPreference(getString(R.string.pref_activate));
+		final Preference preference_activate = findPreference(getString(R.string.pref_activate));
 		boolean nevolution_installed = false, wechat_installed = false, running = false;
 		try {
-			getPackageManager().getApplicationInfo(NEVOLUTION_PACKAGE, 0);
+			pm.getApplicationInfo(NEVOLUTION_PACKAGE, 0);
 			nevolution_installed = true;
-			getPackageManager().getApplicationInfo(WECHAT_PACKAGE, PackageManager.GET_UNINSTALLED_PACKAGES);
+			pm.getApplicationInfo(WECHAT_PACKAGE, PackageManager.GET_UNINSTALLED_PACKAGES);
 			wechat_installed = true;
 			final Intent service = new Intent(this, WeChatDecorator.class).setAction(NevoDecoratorService.ACTION_DECORATOR_SERVICE);
 			running = mDummyReceiver.peekService(this, service) != null;
@@ -63,35 +76,98 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		preference_activate.setSummary(! nevolution_installed ? getText(R.string.pref_activate_summary_nevo_not_installed)
 				: ! wechat_installed ? getText(R.string.pref_activate_summary_wechat_not_installed)
 				: running ? getText(R.string.pref_activate_summary_already_activated) : null);
-		preference_activate.setOnPreferenceClickListener(! nevolution_installed ? this::installNevolution : wechat_installed && ! running ? this::activate : null);
+		preference_activate.setOnPreferenceClickListener(! nevolution_installed ? this::installNevolution
+				: wechat_installed && ! running ? this::activate : null);
 
-		@SuppressWarnings("deprecation") final Preference preference_extension = findPreference(getString(R.string.pref_extension));
-		boolean android_auto_installed = false;
-		try {
-			getPackageManager().getApplicationInfo(ANDROID_AUTO_PACKAGE, 0);
-			android_auto_installed = true;
-			preference_extension.setSelectable(false);
-		} catch (final PackageManager.NameNotFoundException ignored) {}
+		final Preference preference_extension = findPreference(getString(R.string.pref_extension));
+		final boolean android_auto_available = getPackageVersion(ANDROID_AUTO_PACKAGE) >= 0;
 		preference_extension.setEnabled(wechat_installed);
-		preference_extension.setSelectable(! android_auto_installed);
-		preference_extension.setSummary(android_auto_installed ? R.string.pref_extension_summary_installed
-				: isPlayStoreSystemApp() ? R.string.pref_extension_summary_auto : R.string.pref_extension_summary);
-		preference_extension.setOnPreferenceClickListener(android_auto_installed ? null : this::redirectToExtensionPageOnline);
+		preference_extension.setSelectable(! android_auto_available);
+		preference_extension.setSummary(android_auto_available ? R.string.pref_extension_summary_installed : R.string.pref_extension_summary);
+		preference_extension.setOnPreferenceClickListener(android_auto_available ? null : this::installExtension);
 
-		@SuppressWarnings("deprecation") final Preference preference_version = findPreference(getString(R.string.pref_version));
+		final Preference preference_agent = findPreference(getString(R.string.pref_agent));
+		final int agent_version = getPackageVersion(AGENT_WECHAT_PACKAGE);
+		preference_agent.setSummary(agent_version < 0 ? R.string.pref_agent_summary
+				: agent_version >= CURRENT_AGENT_VERSION ? R.string.pref_agent_summary_installed : R.string.pref_agent_summary_update);
+		preference_agent.setOnPreferenceClickListener(agent_version >= CURRENT_AGENT_VERSION ? pref -> selectAgentLabel()
+				: pref -> installAssetApk("agent.apk"));
+
+		final TwoStatePreference preference_hide = (TwoStatePreference) findPreference(getString(R.string.pref_hide));
+		preference_hide.setChecked(pm.getComponentEnabledSetting(new ComponentName(this, getClass())) == COMPONENT_ENABLED_STATE_DISABLED);
+		preference_hide.setOnPreferenceChangeListener(this::toggleHidingLauncherIcon);
+
 		try {
-			preference_version.setSummary(getPackageManager().getPackageInfo(getPackageName(), 0).versionName);
+			findPreference(getString(R.string.pref_version)).setSummary(pm.getPackageInfo(getPackageName(), 0).versionName);
 		} catch (final PackageManager.NameNotFoundException ignored) {}
-		mVersionClickCount = 7;
-		preference_version.setOnPreferenceClickListener(p -> {
-			if (-- mVersionClickCount == 0) {	// Even if Android Auto is installed
-				preference_extension.setEnabled(true);
-				preference_extension.setSelectable(true);
-				preference_extension.setSummary(R.string.pref_extension_summary);
-				preference_extension.setOnPreferenceClickListener(this::redirectToExtensionPageOnline);
-			}
-			return true;
-		});
+	}
+
+	private boolean selectAgentLabel() {
+		final PackageManager pm = getPackageManager();
+		final Intent query = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(AGENT_WECHAT_PACKAGE);
+		final List<ResolveInfo> resolves = pm.queryIntentActivities(query, PackageManager.GET_DISABLED_COMPONENTS);
+		final int size = resolves.size();
+		if (size <= 1) throw new IllegalStateException("No activities found for " + query);
+		final CharSequence[] labels = new CharSequence[size];
+		final String[] names = new String[size];
+		for (int i = 0; i < size; i ++) {
+			final ActivityInfo activity = resolves.get(i).activityInfo;
+			labels[i] = activity.loadLabel(pm);
+			names[i] = activity.name;
+		}
+		new AlertDialog.Builder(this).setSingleChoiceItems(labels, -1, (dialog, which) -> {
+			for (int i = 0; i < names.length; i ++)
+				pm.setComponentEnabledSetting(new ComponentName(AGENT_WECHAT_PACKAGE, names[i]),
+						i == which ? COMPONENT_ENABLED_STATE_ENABLED : COMPONENT_ENABLED_STATE_DISABLED, DONT_KILL_APP);
+			dialog.dismiss();
+		}).show();
+		return true;
+	}
+
+	private boolean toggleHidingLauncherIcon(@SuppressWarnings("unused") final Preference unused, final Object value) {
+		if (value == Boolean.TRUE && getIntent().getAction() != null) {
+			new AlertDialog.Builder(this).setMessage(R.string.prompt_hide_prerequisite).setPositiveButton(android.R.string.cancel, null).show();
+			return false;
+		}
+		getPackageManager().setComponentEnabledSetting(new ComponentName(this, getClass()),
+				value == Boolean.TRUE ? COMPONENT_ENABLED_STATE_DISABLED : COMPONENT_ENABLED_STATE_DEFAULT, DONT_KILL_APP);
+		return true;
+	}
+
+	private boolean installExtension(@SuppressWarnings("unused") final Preference unused) {
+		if (isPlayStoreSystemApp()) {
+			new AlertDialog.Builder(this).setMessage(R.string.prompt_extension_install)
+					.setPositiveButton(R.string.action_install_android_auto, (d, c) -> showAndroidAutoInPlayStore())
+					.setNeutralButton(R.string.action_install_dummy_auto, (d, c) -> installDummyAuto()).show();
+		} else installDummyAuto();
+		return true;
+	}
+
+	private void showAndroidAutoInPlayStore() {
+		try {
+			startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=" + ANDROID_AUTO_PACKAGE))
+					.setPackage(PLAY_STORE_PACKAGE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+		} catch(final ActivityNotFoundException e) { /* In case of Google Play malfunction */ }
+	}
+
+	private void installDummyAuto() {
+		installAssetApk("dummy-auto.apk");
+	}
+
+	private boolean installAssetApk(final String asset_name) {
+		try {
+			final String authority = getPackageManager().getProviderInfo(new ComponentName(this, AssetFileProvider.class), 0).authority;
+			startActivity(new Intent(Intent.ACTION_INSTALL_PACKAGE, Uri.parse("content://" + authority + "/" + asset_name)).addFlags(FLAG_GRANT_READ_URI_PERMISSION));
+		} catch (final PackageManager.NameNotFoundException | ActivityNotFoundException ignored) {}	// Should never happen
+		return true;
+	}
+
+	private int getPackageVersion(final String pkg) {
+		try {
+			return getPackageManager().getPackageInfo(pkg, 0).versionCode;
+		} catch (final PackageManager.NameNotFoundException e) {
+			return -1;
+		}
 	}
 
 	@Override protected void onPause() {
@@ -117,18 +193,6 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		return true;
 	}
 
-	private boolean redirectToExtensionPageOnline(@SuppressWarnings("unused") final Preference preference) {
-		final Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Nevolution/decorator-wechat"));
-		try {
-			startActivity(intent);
-		} catch (final ActivityNotFoundException e) {
-			try {
-				startActivity(intent.setData(requireNonNull(intent.getData()).buildUpon().scheme("http").build()));
-			} catch (final ActivityNotFoundException ignored) {}
-		}
-		return true;
-	}
-
 	private boolean isPlayStoreSystemApp() {
 		try {
 			return (getPackageManager().getApplicationInfo(PLAY_STORE_PACKAGE, 0).flags & ApplicationInfo.FLAG_SYSTEM) != 0;
@@ -141,5 +205,4 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 			-> sendBroadcast(new Intent(WeChatDecorator.ACTION_SETTINGS_CHANGED).setPackage(getPackageName()));
 
 	private final BroadcastReceiver mDummyReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context c, final Intent i) {}};
-	private int mVersionClickCount;
 }

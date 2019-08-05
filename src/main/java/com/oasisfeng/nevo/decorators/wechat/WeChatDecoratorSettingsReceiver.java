@@ -20,12 +20,14 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 
+import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
+
 /**
  * Created by Oasis on 2018/4/26.
  */
 public class WeChatDecoratorSettingsReceiver extends BroadcastReceiver {
 
 	@Override public void onReceive(final Context context, final Intent intent) {
-		context.startActivity(new Intent(context, WeChatDecoratorSettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+		context.startActivity(new Intent().setClassName(context, WeChatDecoratorSettingsActivity.class.getName() + "_").addFlags(FLAG_ACTIVITY_NEW_TASK));
 	}
 }

@@ -18,8 +18,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"
           package="com.oasisfeng.nevo.decorators.wechat" android:versionCode="25004" android:versionName="2.5">
 
-    <application android:label="@string/decorator_wechat_label" android:allowBackup="true" android:icon="@mipmap/ic_launcher"
-                 android:directBootAware="true" tools:targetApi="N" tools:ignore="GoogleAppIndexingWarning">
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <application
+        android:label="@string/decorator_wechat_label"
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@android:style/Theme.Material.Light"
+        android:allowBackup="true"
+        android:directBootAware="true" tools:targetApi="N"
+        tools:ignore="GoogleAppIndexingWarning">
 
         <service android:name=".WeChatDecorator"
                  android:directBootAware="true"
@@ -42,16 +49,23 @@
 
         <activity
             android:name=".WeChatDecoratorSettingsActivity"
-            android:label="@string/decorator_wechat_title"
-            android:theme="@android:style/Theme.Material.Light"
-            android:excludeFromRecents="true"
-            android:process=":ui">
+            android:label="@string/decorator_wechat_title">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-        </activity>
+        </activity> <!-- Can be disabled in settings to hide launcher entrance -->
+
+        <activity-alias
+            android:name=".WeChatDecoratorSettingsActivity_"
+            android:targetActivity=".WeChatDecoratorSettingsActivity"
+            android:label="@string/decorator_wechat_title" /> <!-- Alternate launch entrance for WeChatDecoratorSettingsReceiver -->
+
+        <provider android:name=".AssetFileProvider"
+            android:authorities="com.oasisfeng.nevo.decorators.wechat.files"
+            android:grantUriPermissions="true"
+            android:exported="false" />
 
     </application>
 
