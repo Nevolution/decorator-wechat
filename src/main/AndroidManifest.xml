@@ -23,9 +23,7 @@
     <application
         android:label="@string/decorator_wechat_label"
         android:icon="@mipmap/ic_launcher"
-        android:theme="@android:style/Theme.Material.Light"
         android:allowBackup="true"
-        android:directBootAware="true" tools:targetApi="N"
         tools:ignore="GoogleAppIndexingWarning">
 
         <service android:name=".WeChatDecorator"
@@ -49,6 +47,7 @@
 
         <activity
             android:name=".WeChatDecoratorSettingsActivity"
+            android:theme="@android:style/Theme.Material.Light"
             android:label="@string/decorator_wechat_title">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

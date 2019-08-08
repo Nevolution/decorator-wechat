@@ -93,8 +93,18 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 				: pref -> installAssetApk("agent.apk"));
 
 		final TwoStatePreference preference_hide = (TwoStatePreference) findPreference(getString(R.string.pref_hide));
-		preference_hide.setChecked(pm.getComponentEnabledSetting(new ComponentName(this, getClass())) == COMPONENT_ENABLED_STATE_DISABLED);
-		preference_hide.setOnPreferenceChangeListener(this::toggleHidingLauncherIcon);
+		if (preference_hide != null) {
+			final ComponentName component = new ComponentName(this, getClass());
+			final int state = pm.getComponentEnabledSetting(component);
+			try {
+				if (state == COMPONENT_ENABLED_STATE_DEFAULT && ! pm.getActivityInfo(component, PackageManager.GET_DISABLED_COMPONENTS).enabled) {
+					getPreferenceScreen().removePreference(preference_hide);
+				} else {
+					preference_hide.setChecked(state == COMPONENT_ENABLED_STATE_DISABLED);
+					preference_hide.setOnPreferenceChangeListener(this::toggleHidingLauncherIcon);
+				}
+			} catch (final PackageManager.NameNotFoundException ignored) {}
+		}
 
 		try {
 			findPreference(getString(R.string.pref_version)).setSummary(pm.getPackageInfo(getPackageName(), 0).versionName);
