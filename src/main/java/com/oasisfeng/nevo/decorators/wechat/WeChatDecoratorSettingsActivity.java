@@ -18,12 +18,11 @@ import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceManager;
 import android.preference.TwoStatePreference;
+import android.support.annotation.Nullable;
 
 import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 
 import java.util.List;
-
-import androidx.annotation.Nullable;
 
 import static android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION;
 import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT;

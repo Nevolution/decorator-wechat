@@ -35,6 +35,12 @@ import android.os.Process;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.service.notification.StatusBarNotification;
+import android.support.annotation.ColorInt;
+import android.support.annotation.Nullable;
+import android.support.annotation.RequiresApi;
+import android.support.annotation.StringRes;
+import android.support.v4.app.NotificationCompat.MessagingStyle;
+import android.support.v4.graphics.drawable.IconCompat;
 import android.util.Log;
 
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation;
@@ -48,13 +54,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-
-import androidx.annotation.ColorInt;
-import androidx.annotation.Nullable;
-import androidx.annotation.RequiresApi;
-import androidx.annotation.StringRes;
-import androidx.core.app.NotificationCompat.MessagingStyle;
-import androidx.core.graphics.drawable.IconCompat;
 
 import static android.app.Notification.EXTRA_TEXT;
 import static android.app.Notification.EXTRA_TITLE;

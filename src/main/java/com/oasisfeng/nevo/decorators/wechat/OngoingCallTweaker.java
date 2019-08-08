@@ -6,6 +6,7 @@ import android.media.AudioManager;
 import android.media.AudioRecordingConfiguration;
 import android.media.MediaRecorder;
 import android.os.Bundle;
+import android.support.annotation.RequiresApi;
 import android.util.Log;
 
 import com.oasisfeng.nevo.sdk.MutableNotification;
@@ -13,8 +14,6 @@ import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 
 import java.util.List;
 import java.util.Objects;
-
-import androidx.annotation.RequiresApi;
 
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.N;

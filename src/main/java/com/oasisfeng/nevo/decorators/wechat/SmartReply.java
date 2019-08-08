@@ -1,18 +1,17 @@
 package com.oasisfeng.nevo.decorators.wechat;
 
+import android.support.v4.app.NotificationCompat.MessagingStyle;
+import android.support.v4.app.NotificationCompat.MessagingStyle.Message;
 import android.text.TextUtils;
 
 import java.util.List;
-
-import androidx.core.app.NotificationCompat.MessagingStyle;
-import androidx.core.app.NotificationCompat.MessagingStyle.Message;
 
 /**
  * A no-smart implementation for Smart Reply
  *
  * Created by Oasis on 2018-8-10.
  */
-public class SmartReply {
+class SmartReply {
 
 	private static final CharSequence[][] REPLIES_FOR_QUESTION = {{ "👌", "好", "对", "没问题" }, { "👌", "OK", "Ye" }};
 
