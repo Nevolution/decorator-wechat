@@ -25,7 +25,6 @@ import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 import java.util.List;
 
 import static android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION;
-import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT;
 import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
 import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
 import static android.content.pm.PackageManager.DONT_KILL_APP;
@@ -96,14 +95,8 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		if (preference_hide != null) {
 			final ComponentName component = new ComponentName(this, getClass());
 			final int state = pm.getComponentEnabledSetting(component);
-			try {
-				if (state == COMPONENT_ENABLED_STATE_DEFAULT && ! pm.getActivityInfo(component, PackageManager.GET_DISABLED_COMPONENTS).enabled) {
-					getPreferenceScreen().removePreference(preference_hide);
-				} else {
-					preference_hide.setChecked(state == COMPONENT_ENABLED_STATE_DISABLED);
-					preference_hide.setOnPreferenceChangeListener(this::toggleHidingLauncherIcon);
-				}
-			} catch (final PackageManager.NameNotFoundException ignored) {}
+			preference_hide.setChecked(state == COMPONENT_ENABLED_STATE_DISABLED);
+			preference_hide.setOnPreferenceChangeListener(this::toggleHidingLauncherIcon);
 		}
 
 		try {
@@ -139,7 +132,7 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 			return false;
 		}
 		getPackageManager().setComponentEnabledSetting(new ComponentName(this, getClass()),
-				value == Boolean.TRUE ? COMPONENT_ENABLED_STATE_DISABLED : COMPONENT_ENABLED_STATE_DEFAULT, DONT_KILL_APP);
+				value == Boolean.TRUE ? COMPONENT_ENABLED_STATE_DISABLED : COMPONENT_ENABLED_STATE_ENABLED, DONT_KILL_APP);
 		return true;
 	}
 
@@ -177,6 +170,13 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		} catch (final PackageManager.NameNotFoundException e) {
 			return -1;
 		}
+	}
+
+	static void enableLauncherEntranceIfNotYet(final Context context) {
+		final ComponentName settings_component = new ComponentName(context, WeChatDecoratorSettingsActivity.class);
+		final int state = context.getPackageManager().getComponentEnabledSetting(settings_component);
+		if (state == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT)
+			context.getPackageManager().setComponentEnabledSetting(settings_component, COMPONENT_ENABLED_STATE_ENABLED, DONT_KILL_APP);
 	}
 
 	@Override protected void onPause() {
