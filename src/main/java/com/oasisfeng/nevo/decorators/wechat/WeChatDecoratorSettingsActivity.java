@@ -25,6 +25,7 @@ import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 import java.util.List;
 
 import static android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION;
+import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT;
 import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
 import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
 import static android.content.pm.PackageManager.DONT_KILL_APP;
@@ -65,8 +66,7 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 			nevolution_installed = true;
 			pm.getApplicationInfo(WECHAT_PACKAGE, PackageManager.GET_UNINSTALLED_PACKAGES);
 			wechat_installed = true;
-			final Intent service = new Intent(this, WeChatDecorator.class).setAction(NevoDecoratorService.ACTION_DECORATOR_SERVICE);
-			running = mDummyReceiver.peekService(this, service) != null;
+			running = isDecoratorRunning();
 		} catch (final PackageManager.NameNotFoundException ignored) {}
 
 		preference_activate.setEnabled(! nevolution_installed || wechat_installed);		// No reason to promote WeChat if not installed.
@@ -127,13 +127,21 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 	}
 
 	private boolean toggleHidingLauncherIcon(@SuppressWarnings("unused") final Preference unused, final Object value) {
-		if (value == Boolean.TRUE && getIntent().getAction() != null) {
+		final boolean start_from_launcher = getIntent().getAction() != null;
+		final boolean standalone = getPackageName().equals(BuildConfig.APPLICATION_ID);
+		// Always allow hiding if bundled and decorator is inactive, but it will be re-enabled automatically upon next decorator activation.
+		if (start_from_launcher && value == Boolean.TRUE && (standalone || isDecoratorRunning())) {
 			new AlertDialog.Builder(this).setMessage(R.string.prompt_hide_prerequisite).setPositiveButton(android.R.string.cancel, null).show();
 			return false;
 		}
-		getPackageManager().setComponentEnabledSetting(new ComponentName(this, getClass()),
-				value == Boolean.TRUE ? COMPONENT_ENABLED_STATE_DISABLED : COMPONENT_ENABLED_STATE_ENABLED, DONT_KILL_APP);
+		getPackageManager().setComponentEnabledSetting(new ComponentName(this, getClass()), value != Boolean.TRUE ? COMPONENT_ENABLED_STATE_ENABLED
+				: standalone ? COMPONENT_ENABLED_STATE_DISABLED : COMPONENT_ENABLED_STATE_DEFAULT, DONT_KILL_APP);
 		return true;
+	}
+
+	private boolean isDecoratorRunning() {
+		final Intent service = new Intent(this, WeChatDecorator.class).setAction(NevoDecoratorService.ACTION_DECORATOR_SERVICE);
+		return mDummyReceiver.peekService(this, service) != null;
 	}
 
 	private boolean installExtension(@SuppressWarnings("unused") final Preference unused) {
@@ -175,7 +183,7 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 	static void enableLauncherEntranceIfNotYet(final Context context) {
 		final ComponentName settings_component = new ComponentName(context, WeChatDecoratorSettingsActivity.class);
 		final int state = context.getPackageManager().getComponentEnabledSetting(settings_component);
-		if (state == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT)
+		if (state == COMPONENT_ENABLED_STATE_DEFAULT)
 			context.getPackageManager().setComponentEnabledSetting(settings_component, COMPONENT_ENABLED_STATE_ENABLED, DONT_KILL_APP);
 	}
 
