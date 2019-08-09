@@ -39,7 +39,7 @@ import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.WECHAT_PACKAG
 @SuppressWarnings("deprecation") @SuppressLint("ExportedPreferenceActivity")
 public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 
-	private static final int CURRENT_AGENT_VERSION = 1100;
+	private static final int CURRENT_AGENT_VERSION = 1200;
 	private static final String NEVOLUTION_PACKAGE = "com.oasisfeng.nevo";
 	private static final String ANDROID_AUTO_PACKAGE = "com.google.android.projection.gearhead";
 	private static final String AGENT_WECHAT_PACKAGE = "com.oasisfeng.nevo.agents.wechat";
@@ -86,6 +86,7 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 
 		final Preference preference_agent = findPreference(getString(R.string.pref_agent));
 		final int agent_version = getPackageVersion(AGENT_WECHAT_PACKAGE);
+		preference_agent.setEnabled(wechat_installed);
 		preference_agent.setSummary(agent_version < 0 ? R.string.pref_agent_summary
 				: agent_version >= CURRENT_AGENT_VERSION ? R.string.pref_agent_summary_installed : R.string.pref_agent_summary_update);
 		preference_agent.setOnPreferenceClickListener(agent_version >= CURRENT_AGENT_VERSION ? pref -> selectAgentLabel()
