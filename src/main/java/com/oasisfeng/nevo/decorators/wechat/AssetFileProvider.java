@@ -2,6 +2,7 @@ package com.oasisfeng.nevo.decorators.wechat;
 
 import android.content.ContentProvider;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.net.Uri;
@@ -23,8 +24,13 @@ public class AssetFileProvider extends ContentProvider {
 	@Nullable @Override public AssetFileDescriptor openAssetFile(@NonNull final Uri uri, @NonNull final String mode) throws FileNotFoundException {
 		final String filename = uri.getLastPathSegment();
 		if (filename == null) throw new FileNotFoundException();
+		final Context context = Objects.requireNonNull(getContext());
 		try {
-			return Objects.requireNonNull(getContext()).getAssets().openFd(filename);
+			final String suffix = context.getString(R.string.repacked_asset_suffix);
+			final int offset = context.getResources().getInteger(R.integer.repacked_asset_offset);
+			final AssetFileDescriptor afd = Objects.requireNonNull(context).getAssets().openFd(
+					! suffix.isEmpty() && filename.endsWith(suffix) ? filename + context.getString(R.string.repacked_asset_appendix) : filename);
+			return new AssetFileDescriptor(afd.getParcelFileDescriptor(), afd.getStartOffset() + offset, afd.getLength() - offset);
 		} catch (final IOException e) {
 			Log.e(WeChatDecorator.TAG, "Error opening asset", e);
 			return null;

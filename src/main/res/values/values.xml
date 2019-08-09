@@ -5,6 +5,10 @@
         <item>通話</item>  <!-- 繁體 -->
         <item>call</item> <!-- English -->
     </string-array>
+    <string name="repacked_asset_suffix" translatable="false" />
+    <string name="repacked_asset_appendix" translatable="false" />
+    <integer name="repacked_asset_offset">0</integer>
+
     <string name="pref_activate" translatable="false">activate</string>
     <string name="pref_extension" translatable="false">extension</string>
     <string name="pref_agent" translatable="false">agent</string>
