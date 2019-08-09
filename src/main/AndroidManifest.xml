@@ -22,12 +22,12 @@
 
     <application
         android:label="@string/decorator_wechat_label"
-        android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
         tools:ignore="GoogleAppIndexingWarning">
 
         <service android:name=".WeChatDecorator"
-                 android:directBootAware="true"
+                 android:icon="@mipmap/ic_decorators_wechat_launcher"
+                 android:directBootAware="true" tools:targetApi="N"
                  android:permission="com.oasisfeng.nevo.permission.BIND_DECORATOR_SERVICE"
                  android:process="com.oasisfeng.nevo.decorators"
                  android:label="@string/decorator_wechat_title"
@@ -47,8 +47,9 @@
 
         <activity
             android:name=".WeChatDecoratorSettingsActivity"
-            android:theme="@android:style/Theme.Material.Light"
-            android:label="@string/decorator_wechat_title">
+            android:icon="@mipmap/ic_decorators_wechat_launcher"
+            android:label="@string/decorator_wechat_title"
+            android:theme="@android:style/Theme.Material.Light">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -59,6 +60,7 @@
         <activity-alias
             android:name=".WeChatDecoratorSettingsActivity_"
             android:targetActivity=".WeChatDecoratorSettingsActivity"
+            android:icon="@mipmap/ic_decorators_wechat_launcher"
             android:label="@string/decorator_wechat_title" /> <!-- Alternate launch entrance for WeChatDecoratorSettingsReceiver -->
 
         <provider android:name=".AssetFileProvider"
