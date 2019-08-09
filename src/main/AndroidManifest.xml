@@ -49,6 +49,7 @@
             android:name=".WeChatDecoratorSettingsActivity"
             android:icon="@mipmap/ic_decorators_wechat_launcher"
             android:label="@string/decorator_wechat_title"
+            android:taskAffinity=""
             android:theme="@android:style/Theme.Material.Light">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
