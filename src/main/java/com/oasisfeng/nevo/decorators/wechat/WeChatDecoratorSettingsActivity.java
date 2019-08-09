@@ -39,7 +39,7 @@ import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.WECHAT_PACKAG
 @SuppressWarnings("deprecation") @SuppressLint("ExportedPreferenceActivity")
 public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 
-	private static final int CURRENT_AGENT_VERSION = 1200;
+	private static final int CURRENT_AGENT_VERSION = 1300;
 	private static final String NEVOLUTION_PACKAGE = "com.oasisfeng.nevo";
 	private static final String ANDROID_AUTO_PACKAGE = "com.google.android.projection.gearhead";
 	private static final String AGENT_WECHAT_PACKAGE = "com.oasisfeng.nevo.agents.wechat";
