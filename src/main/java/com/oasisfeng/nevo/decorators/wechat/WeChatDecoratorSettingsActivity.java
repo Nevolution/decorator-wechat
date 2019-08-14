@@ -48,10 +48,8 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 
 	@Override protected void onCreate(@Nullable final Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		if (SDK_INT >= N) //noinspection deprecation
-			getPreferenceManager().setStorageDeviceProtected();
-		//noinspection deprecation
-		addPreferencesFromResource(R.xml.settings);
+		if (SDK_INT >= N) getPreferenceManager().setStorageDeviceProtected();
+		addPreferencesFromResource(R.xml.decorators_wechat_settings);
 	}
 
 	@Override protected void onResume() {
