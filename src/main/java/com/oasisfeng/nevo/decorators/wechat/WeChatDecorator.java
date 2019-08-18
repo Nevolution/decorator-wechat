@@ -183,7 +183,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 	}
 
 	@Override protected void onConnected() {
-		WeChatDecoratorSettingsActivity.enableLauncherEntranceIfNotYet(this);		// Enable launcher entrance for settings on the first start.
 		if (SDK_INT >= O) {
 			mWeChatTargetingO = isWeChatTargeting26OrAbove();
 			final List<NotificationChannel> channels = new ArrayList<>();
