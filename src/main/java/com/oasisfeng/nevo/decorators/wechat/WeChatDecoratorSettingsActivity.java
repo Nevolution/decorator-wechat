@@ -19,6 +19,7 @@ import android.preference.PreferenceActivity;
 import android.preference.PreferenceManager;
 import android.preference.TwoStatePreference;
 import android.support.annotation.Nullable;
+import android.support.annotation.StringRes;
 
 import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 
@@ -84,10 +85,16 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		final Preference preference_agent = findPreference(getString(R.string.pref_agent));
 		final int agent_version = getPackageVersion(AGENT_WECHAT_PACKAGE);
 		preference_agent.setEnabled(wechat_installed);
-		preference_agent.setSummary(agent_version < 0 ? R.string.pref_agent_summary
-				: agent_version >= CURRENT_AGENT_VERSION ? R.string.pref_agent_summary_installed : R.string.pref_agent_summary_update);
-		preference_agent.setOnPreferenceClickListener(agent_version >= CURRENT_AGENT_VERSION ? pref -> selectAgentLabel()
-				: pref -> installAssetApk("agent.apk"));
+		if (agent_version >= CURRENT_AGENT_VERSION) {
+			final Intent launcher_intent = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(AGENT_WECHAT_PACKAGE);
+			final boolean disabled = pm.queryIntentActivities(launcher_intent, 0).isEmpty();
+			final @StringRes int prefix = (disabled ? R.string.pref_agent_summary_prefix_disabled : R.string.pref_agent_summary_prefix_enabled);
+			preference_agent.setSummary(getString(prefix) + "\n" + getString(R.string.pref_agent_summary_installed));
+			preference_agent.setOnPreferenceClickListener(pref -> selectAgentLabel());
+		} else {
+			preference_agent.setSummary(agent_version < 0 ? R.string.pref_agent_summary : R.string.pref_agent_summary_update);
+			preference_agent.setOnPreferenceClickListener(pref -> installAssetApk("agent.apk"));
+		}
 
 		final boolean standalone = isStandalone();
 		final TwoStatePreference preference_hide = (TwoStatePreference) findPreference(getString(R.string.pref_hide));
@@ -111,14 +118,15 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		final List<ResolveInfo> resolves = pm.queryIntentActivities(query, PackageManager.GET_DISABLED_COMPONENTS);
 		final int size = resolves.size();
 		if (size <= 1) throw new IllegalStateException("No activities found for " + query);
-		final CharSequence[] labels = new CharSequence[size];
+		final CharSequence[] labels = new CharSequence[size + 1];
 		final String[] names = new String[size];
 		for (int i = 0; i < size; i ++) {
 			final ActivityInfo activity = resolves.get(i).activityInfo;
 			labels[i] = activity.loadLabel(pm);
 			names[i] = activity.name;
 		}
-		new AlertDialog.Builder(this).setSingleChoiceItems(labels, -1, (dialog, which) -> {
+		labels[size] = getText(R.string.action_disable_agent_launcher_entrance);
+		new AlertDialog.Builder(this).setSingleChoiceItems(labels, -1, (dialog, which) -> {	// TODO: Item cannot be selected on Sony device?
 			for (int i = 0; i < names.length; i ++)
 				pm.setComponentEnabledSetting(new ComponentName(AGENT_WECHAT_PACKAGE, names[i]),
 						i == which ? COMPONENT_ENABLED_STATE_ENABLED : COMPONENT_ENABLED_STATE_DISABLED, DONT_KILL_APP);
