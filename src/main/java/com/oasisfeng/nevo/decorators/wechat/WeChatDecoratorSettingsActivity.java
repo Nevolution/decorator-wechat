@@ -108,7 +108,9 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		}
 
 		try {
-			findPreference(getString(R.string.pref_version)).setSummary(pm.getPackageInfo(getPackageName(), 0).versionName);
+			final Preference preference_version = findPreference(getString(R.string.pref_version));
+			if (standalone) preference_version.setSummary(pm.getPackageInfo(getPackageName(), 0).versionName);
+			else getPreferenceScreen().removePreference(preference_version);
 		} catch (final PackageManager.NameNotFoundException ignored) {}
 	}
 

@@ -18,7 +18,7 @@
 <resources>
     <string name="decorator_wechat_label">女娲石 - 即时通信增强（支持微信通知）</string>
     <string name="decorator_wechat_title">微信通知增强</string>
-    <string name="decorator_wechat_description">符合当代 Android 的最佳通知体验：可展开的会话样式、直接回复、划除即已读等高级特性。</string>
+    <string name="decorator_wechat_description">符合当代 Android 的最佳通知体验：会话样式、直接回复、划除即已读等高级特性。</string>
     <string name="self_display_name">你</string>
     <string name="action_reply">回复</string>
     <string name="action_preview_image">预览图片</string>
@@ -33,13 +33,13 @@
     <string name="pref_activate_summary_wechat_not_installed">“微信”未安装</string>
     <string name="pref_activate_summary_nevo_not_installed">“女娲石”尚未安装</string>
     <string name="pref_activate_summary_already_activated">已启用</string>
-    <string name="pref_extension_title">扩展包</string>
+    <string name="pref_extension_title">特性扩展包</string>
     <string name="pref_extension_summary">添加更多特性（快捷回复、划掉标记已读 等）</string>
     <string name="pref_extension_summary_installed">已安装</string>
     <string name="prompt_extension_install">你有两个选项：安装完整版的 Android Auto（消耗较多空间），或者“极简包”。如果你不需要使用 Android Auto 或者不清楚它是什么，建议选择“极简包”。</string>
     <string name="action_install_android_auto">安装 Android Auto</string>
     <string name="action_install_dummy_auto">安装极简包</string>
-    <string name="pref_agent_title">体验增强</string>
+    <string name="pref_agent_title">体验增强包</string>
     <string name="pref_agent_summary">通过安装一个微信的替身，可消除女娲石在外源模式下的微信通知前缀，支持通知圆点（需启动器支持），并提供“扫码”的快捷方式。</string>
     <string name="pref_agent_summary_prefix_enabled">已启用</string>
     <string name="pref_agent_summary_prefix_disabled">已禁用</string>
