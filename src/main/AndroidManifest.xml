@@ -50,7 +50,8 @@
             android:icon="@mipmap/ic_decorators_wechat_launcher"
             android:label="@string/decorator_wechat_title"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.Material.Light">
+            android:theme="@android:style/Theme.Material.Light"
+            android:process=":ui">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -67,7 +68,8 @@
         <provider android:name=".AssetFileProvider"
             android:authorities="com.oasisfeng.nevo.decorators.wechat.files"
             android:grantUriPermissions="true"
-            android:exported="false" />
+            android:exported="false"
+            android:process=":ui" />
 
     </application>
 
