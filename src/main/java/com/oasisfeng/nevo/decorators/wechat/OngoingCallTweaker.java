@@ -79,7 +79,7 @@ class OngoingCallTweaker {
 		mUpdater = updater;
 	}
 
-	@RequiresApi(N) private final AudioManager.AudioRecordingCallback mAudioRecordingCallback = new AudioManager.AudioRecordingCallback() {
+	@RequiresApi(N) private final AudioManager.AudioRecordingCallback mAudioRecordingCallback = SDK_INT < N ? null : new AudioManager.AudioRecordingCallback() {
 
 		@Override public void onRecordingConfigChanged(final List<AudioRecordingConfiguration> configs) {
 			for (final AudioRecordingConfiguration config : configs) {
