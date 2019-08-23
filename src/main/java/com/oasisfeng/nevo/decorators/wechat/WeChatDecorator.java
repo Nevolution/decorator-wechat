@@ -104,7 +104,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (n.tickerText == null/* Legacy misc. notifications */|| CHANNEL_MISC.equals(channel_id)) {
 			if (SDK_INT >= O && channel_id == null) n.setChannelId(CHANNEL_MISC);
 			n.setGroup(GROUP_MISC);		// Avoid being auto-grouped
-			if (! mOngoingCallTweaker.apply(this, evolving.getOriginalKey(), n))
+			if (SDK_INT < O || ! mOngoingCallTweaker.apply(this, evolving.getOriginalKey(), n))
 				Log.d(TAG, "Skip further process for non-conversation notification: " + title);    // E.g. web login confirmation notification.
 			return true;
 		}
@@ -173,7 +173,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	@Override protected boolean onNotificationRemoved(final String key, final int reason) {
 		if (reason == REASON_APP_CANCEL) {		// For ongoing notification, or if "Removal-Aware" of Nevolution is activated
 			Log.d(TAG, "Cancel notification: " + key);
-			mOngoingCallTweaker.onNotificationRemoved(key);
+			if (SDK_INT >= O) mOngoingCallTweaker.onNotificationRemoved(key);
 		} else if (reason == REASON_CHANNEL_BANNED) {	// In case WeChat deleted our notification channel for group conversation in Insider delivery mode
 			mHandler.post(() -> reviveNotification(key));
 		} else if (SDK_INT < O || reason == REASON_CANCEL) {	// Exclude the removal request by us in above case. (Removal-Aware is only supported on Android 8+)
@@ -242,7 +242,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		mPrefKeyWear = getString(R.string.pref_wear);
 
 		mMessagingBuilder = new MessagingBuilder(this, mPreferences, this::recastNotification);		// Must be called after loadPreferences().
-		mOngoingCallTweaker = new OngoingCallTweaker(this, this::recastNotification);
+		if (SDK_INT >= O) mOngoingCallTweaker = new OngoingCallTweaker(this, this::recastNotification);
 		final IntentFilter filter = new IntentFilter(Intent.ACTION_PACKAGE_REMOVED); filter.addDataScheme("package");
 		registerReceiver(mPackageEventReceiver, filter);
 		registerReceiver(mSettingsChangedReceiver, new IntentFilter(ACTION_SETTINGS_CHANGED));
@@ -251,7 +251,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	@Override public void onDestroy() {
 		unregisterReceiver(mSettingsChangedReceiver);
 		unregisterReceiver(mPackageEventReceiver);
-		mOngoingCallTweaker.close();
+		if (SDK_INT >= O) mOngoingCallTweaker.close();
 		mMessagingBuilder.close();
 		super.onDestroy();
 	}
@@ -316,7 +316,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	}
 	private static final String PREF_KEY_MIGRATED = "migrated";
 
-	@SuppressWarnings("deprecation") private static String getDefaultSharedPreferencesName(final Context context) {
+	private static String getDefaultSharedPreferencesName(final Context context) {
 		return SDK_INT >= N ? PreferenceManager.getDefaultSharedPreferencesName(context) : context.getPackageName() + "_preferences";
 	}
 
@@ -330,7 +330,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	private final ConversationManager mConversationManager = new ConversationManager();
 	private MessagingBuilder mMessagingBuilder;
-	private OngoingCallTweaker mOngoingCallTweaker;
+	private @RequiresApi(O) OngoingCallTweaker mOngoingCallTweaker;
 	private boolean mWeChatTargetingO;
 	private SharedPreferences mPreferences;
 	private String mPrefKeyWear;

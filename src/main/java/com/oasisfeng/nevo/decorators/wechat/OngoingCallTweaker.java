@@ -15,8 +15,6 @@ import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 import java.util.List;
 import java.util.Objects;
 
-import static android.os.Build.VERSION.SDK_INT;
-import static android.os.Build.VERSION_CODES.N;
 import static android.os.Build.VERSION_CODES.O;
 import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.TAG;
 
@@ -25,7 +23,7 @@ import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.TAG;
  *
  * Created by Oasis on 2019-3-17.
  */
-class OngoingCallTweaker {
+@RequiresApi(O) class OngoingCallTweaker {
 
 	private static final String EXTRA_CALL_START_TIME = "call.start";
 
@@ -47,8 +45,8 @@ class OngoingCallTweaker {
 	private boolean tweakOngoingCall(final MutableNotification n) {
 		n.category = Notification.CATEGORY_CALL;
 		n.flags |= Notification.FLAG_FOREGROUND_SERVICE;	// For EXTRA_COLORIZED to work. (Foreground service is already used by newer version of WeChat)
-		if (SDK_INT >= O) n.extras.putBoolean(Notification.EXTRA_COLORIZED, true);
-		if (SDK_INT >= N) getAudioManager().registerAudioRecordingCallback(mAudioRecordingCallback, null);
+		n.extras.putBoolean(Notification.EXTRA_COLORIZED, true);
+		getAudioManager().registerAudioRecordingCallback(mAudioRecordingCallback, null);
 
 		final long start_time = n.extras.getLong(EXTRA_CALL_START_TIME, 0);
 		n.when = start_time > 0 ? start_time : System.currentTimeMillis();
@@ -67,7 +65,7 @@ class OngoingCallTweaker {
 		unregisterAudioRecordingCallback();
 	}
 
-	private void unregisterAudioRecordingCallback() { if (SDK_INT >= N) getAudioManager().unregisterAudioRecordingCallback(mAudioRecordingCallback); }
+	private void unregisterAudioRecordingCallback() { getAudioManager().unregisterAudioRecordingCallback(mAudioRecordingCallback); }
 	private AudioManager getAudioManager() { return Objects.requireNonNull((AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE)); }
 
 	interface NotificationUpdater {
@@ -79,7 +77,7 @@ class OngoingCallTweaker {
 		mUpdater = updater;
 	}
 
-	@RequiresApi(N) private final AudioManager.AudioRecordingCallback mAudioRecordingCallback = SDK_INT < N ? null : new AudioManager.AudioRecordingCallback() {
+	private final AudioManager.AudioRecordingCallback mAudioRecordingCallback = new AudioManager.AudioRecordingCallback() {
 
 		@Override public void onRecordingConfigChanged(final List<AudioRecordingConfiguration> configs) {
 			for (final AudioRecordingConfiguration config : configs) {
