@@ -11,6 +11,7 @@ import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Bundle;
@@ -65,7 +66,7 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 			pm.getApplicationInfo(WECHAT_PACKAGE, PackageManager.GET_UNINSTALLED_PACKAGES);
 			wechat_installed = true;
 			running = isDecoratorRunning();
-		} catch (final PackageManager.NameNotFoundException ignored) {}
+		} catch (final NameNotFoundException ignored) {}
 
 		preference_activate.setEnabled(! nevolution_installed || wechat_installed);		// No reason to promote WeChat if not installed.
 		preference_activate.setSelectable(! running);
@@ -107,11 +108,11 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 			} else getPreferenceScreen().removePreference(preference_hide);
 		}
 
-		try {
-			final Preference preference_version = findPreference(getString(R.string.pref_version));
-			if (standalone) preference_version.setSummary(pm.getPackageInfo(getPackageName(), 0).versionName);
-			else getPreferenceScreen().removePreference(preference_version);
-		} catch (final PackageManager.NameNotFoundException ignored) {}
+		final Preference pref_ver = findPreference(getString(R.string.pref_version));
+		if (pref_ver != null) {
+			if (! standalone) getPreferenceScreen().removePreference(pref_ver);
+			else try { pref_ver.setSummary(pm.getPackageInfo(getPackageName(), 0).versionName); } catch (final NameNotFoundException ignored) {}
+		}
 	}
 
 	private boolean selectAgentLabel() {
@@ -181,14 +182,14 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		try {
 			final String authority = getPackageManager().getProviderInfo(new ComponentName(this, AssetFileProvider.class), 0).authority;
 			startActivity(new Intent(Intent.ACTION_INSTALL_PACKAGE, Uri.parse("content://" + authority + "/" + asset_name)).addFlags(FLAG_GRANT_READ_URI_PERMISSION));
-		} catch (final PackageManager.NameNotFoundException | ActivityNotFoundException ignored) {}	// Should never happen
+		} catch (final NameNotFoundException | ActivityNotFoundException ignored) {}	// Should never happen
 		return true;
 	}
 
 	private int getPackageVersion(final String pkg) {
 		try {
 			return getPackageManager().getPackageInfo(pkg, 0).versionCode;
-		} catch (final PackageManager.NameNotFoundException e) {
+		} catch (final NameNotFoundException e) {
 			return -1;
 		}
 	}
@@ -219,7 +220,7 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 	private boolean isPlayStoreSystemApp() {
 		try {
 			return (getPackageManager().getApplicationInfo(PLAY_STORE_PACKAGE, 0).flags & ApplicationInfo.FLAG_SYSTEM) != 0;
-		} catch (final PackageManager.NameNotFoundException e) {
+		} catch (final NameNotFoundException e) {
 			return false;
 		}
 	}
