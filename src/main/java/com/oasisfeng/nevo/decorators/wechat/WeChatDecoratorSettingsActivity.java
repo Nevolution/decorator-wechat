@@ -108,6 +108,16 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 			} else getPreferenceScreen().removePreference(preference_hide);
 		}
 
+		final Preference pref_source = findPreference(getString(R.string.pref_source));
+		if (pref_source != null) {
+			pref_source.setOnPreferenceClickListener(p -> {
+				try {
+					startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Nevolution/decorator-wechat")));
+				} catch(final ActivityNotFoundException ignored) {}
+				return true;
+			});
+		}
+
 		final Preference pref_ver = findPreference(getString(R.string.pref_version));
 		if (pref_ver != null) {
 			if (! standalone) getPreferenceScreen().removePreference(pref_ver);
