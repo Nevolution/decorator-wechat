@@ -239,6 +239,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	@Override public void onCreate() {
 		super.onCreate();
 		loadPreferences();
+		migrateFromLegacyPreferences();		// TODO: Remove this IO-blocking migration code (created in Aug, 2019).
 		mPrefKeyWear = getString(R.string.pref_wear);
 
 		mMessagingBuilder = new MessagingBuilder(this, mPreferences, this::recastNotification);		// Must be called after loadPreferences().
@@ -290,14 +291,13 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final Context context = SDK_INT >= N ? createDeviceProtectedStorageContext() : this;
 		//noinspection deprecation
 		mPreferences = context.getSharedPreferences(PREFERENCES_NAME, MODE_MULTI_PROCESS);
-		migrateFromLegacyPreferences(context);		// TODO: Remove this IO-blocking migration code (created in Aug, 2019).
 	}
 
-	private void migrateFromLegacyPreferences(final Context context) {
+	private void migrateFromLegacyPreferences() {
 		if (mPreferences.getInt(PREF_KEY_MIGRATED, 0) >= 1) return;
 		final SharedPreferences.Editor editor = mPreferences.edit();
 		try {
-			@SuppressWarnings("deprecation") final Context old_context = context.createPackageContext(BuildConfig.APPLICATION_ID, 0);
+			@SuppressWarnings("deprecation") final Context old_context = createPackageContext(BuildConfig.APPLICATION_ID, 0);
 			final SharedPreferences old_sp = (SDK_INT >= N ? old_context.createDeviceProtectedStorageContext() : old_context)
 					.getSharedPreferences(getDefaultSharedPreferencesName(old_context), 0);
 			final Map<String, ?> old_entries = old_sp.getAll();
