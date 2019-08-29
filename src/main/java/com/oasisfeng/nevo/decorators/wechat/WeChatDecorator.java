@@ -243,7 +243,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		mPrefKeyWear = getString(R.string.pref_wear);
 
 		mMessagingBuilder = new MessagingBuilder(this, mPreferences, this::recastNotification);		// Must be called after loadPreferences().
-		if (SDK_INT >= O) mOngoingCallTweaker = new OngoingCallTweaker(this, this::recastNotification);
+		if (SDK_INT >= O) mOngoingCallTweaker = new OngoingCallTweaker(this, mPreferences, this::recastNotification);
 		final IntentFilter filter = new IntentFilter(Intent.ACTION_PACKAGE_REMOVED); filter.addDataScheme("package");
 		registerReceiver(mPackageEventReceiver, filter);
 		registerReceiver(mSettingsChangedReceiver, new IntentFilter(ACTION_SETTINGS_CHANGED));
