@@ -86,7 +86,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private static final @ColorInt int LIGHT_COLOR = 0xFF00FF00;
 	static final String ACTION_SETTINGS_CHANGED = "SETTINGS_CHANGED";
 	static final String ACTION_DEBUG_NOTIFICATION = "DEBUG";
-	private static final String PREFERENCES_NAME = "decorators-wechat";
+	static final String PREFERENCES_NAME = "decorators-wechat";
 
 	@Override public boolean apply(final MutableStatusBarNotification evolving) {
 		final MutableNotification n = evolving.getNotification();

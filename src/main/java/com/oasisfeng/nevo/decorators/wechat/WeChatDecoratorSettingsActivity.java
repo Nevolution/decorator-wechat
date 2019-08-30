@@ -21,6 +21,7 @@ import android.preference.PreferenceManager;
 import android.preference.TwoStatePreference;
 import android.support.annotation.Nullable;
 import android.support.annotation.StringRes;
+import android.util.Log;
 
 import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 
@@ -32,6 +33,7 @@ import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
 import static android.content.pm.PackageManager.DONT_KILL_APP;
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.N;
+import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.TAG;
 import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.WECHAT_PACKAGE;
 
 /**
@@ -49,17 +51,18 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 
 	@Override protected void onCreate(@Nullable final Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		if (SDK_INT >= N) getPreferenceManager().setStorageDeviceProtected();
+		final PreferenceManager manager = getPreferenceManager();
+		manager.setSharedPreferencesName(WeChatDecorator.PREFERENCES_NAME);
+		if (SDK_INT >= N) manager.setStorageDeviceProtected();
+		getPreferenceManager().getSharedPreferences().registerOnSharedPreferenceChangeListener(mPreferencesChangeListener);
 		addPreferencesFromResource(R.xml.decorators_wechat_settings);
 	}
 
 	@Override protected void onResume() {
 		super.onResume();
-		final PackageManager pm = getPackageManager();
-		PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(mPreferencesChangeListener);
-
 		final Preference preference_activate = findPreference(getString(R.string.pref_activate));
 		boolean nevolution_installed = false, wechat_installed = false, running = false;
+		final PackageManager pm = getPackageManager();
 		try {
 			pm.getApplicationInfo(NEVOLUTION_PACKAGE, 0);
 			nevolution_installed = true;
@@ -204,9 +207,9 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		}
 	}
 
-	@Override protected void onPause() {
-		super.onPause();
-		PreferenceManager.getDefaultSharedPreferences(this).unregisterOnSharedPreferenceChangeListener(mPreferencesChangeListener);
+	@Override protected void onDestroy() {
+		getPreferenceManager().getSharedPreferences().unregisterOnSharedPreferenceChangeListener(mPreferencesChangeListener);
+		super.onDestroy();
 	}
 
 	private boolean installNevolution(final @SuppressWarnings("unused") Preference preference) {
@@ -235,8 +238,10 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		}
 	}
 
-	private final SharedPreferences.OnSharedPreferenceChangeListener mPreferencesChangeListener = (prefs, key)
-			-> sendBroadcast(new Intent(WeChatDecorator.ACTION_SETTINGS_CHANGED).setPackage(getPackageName()));
+	private final SharedPreferences.OnSharedPreferenceChangeListener mPreferencesChangeListener = (prefs, key) -> {
+		Log.d(TAG, "Settings changed, notify decorator now.");
+		sendBroadcast(new Intent(WeChatDecorator.ACTION_SETTINGS_CHANGED).setPackage(getPackageName()));
+	};
 
 	private final BroadcastReceiver mDummyReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context c, final Intent i) {}};
 }
