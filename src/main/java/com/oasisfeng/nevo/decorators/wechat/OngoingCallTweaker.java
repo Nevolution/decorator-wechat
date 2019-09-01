@@ -45,6 +45,7 @@ import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.TAG;
 	}
 
 	private boolean tweakOngoingCall(final MutableNotification n) {
+		n.setChannelId(WeChatDecorator.CHANNEL_MESSAGE);
 		n.category = Notification.CATEGORY_CALL;
 		n.flags |= Notification.FLAG_FOREGROUND_SERVICE;	// For EXTRA_COLORIZED to work. (Foreground service is already used by newer version of WeChat)
 		n.extras.putBoolean(Notification.EXTRA_COLORIZED, true);

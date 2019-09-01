@@ -73,8 +73,8 @@ import static android.service.notification.NotificationListenerService.REASON_CH
 public class WeChatDecorator extends NevoDecoratorService {
 
 	public static final String WECHAT_PACKAGE = "com.tencent.mm";
+	static final String CHANNEL_MESSAGE = "message_channel_new_id";						// Channel ID used by WeChat for all message notifications
 	private static final int MAX_NUM_ARCHIVED = 20;
-	private static final String CHANNEL_MESSAGE = "message_channel_new_id";				// Channel ID used by WeChat for all message notifications
 	private static final String OLD_CHANNEL_MESSAGE = "message";						//   old name for migration
 	private static final String CHANNEL_MISC = "reminder_channel_id";					// Channel ID used by WeChat for misc. notifications
 	private static final String OLD_CHANNEL_MISC = "misc";								//   old name for migration
