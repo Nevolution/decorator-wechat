@@ -16,6 +16,5 @@
     <string name="pref_mention_action" translatable="false">mention</string>
     <string name="pref_wear" translatable="false">wear</string>
     <string name="pref_hide" translatable="false">hide</string>
-    <string name="pref_source" translatable="false">source</string>
     <string name="pref_version" translatable="false">version</string>
 </resources>

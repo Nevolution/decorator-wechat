@@ -40,9 +40,9 @@
         android:summary="@string/pref_hide_summary" />
 
     <Preference
-        android:key="@string/pref_source"
         android:title="@string/pref_open_source_title"
         android:summary="@string/pref_open_source_summary">
+        <intent android:action="android.intent.action.VIEW" android:data="https://github.com/Nevolution/decorator-wechat" />
     </Preference>
 
     <Preference
