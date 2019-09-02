@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 import static android.app.Notification.EXTRA_TEXT;
 import static android.app.Notification.EXTRA_TITLE;
@@ -103,10 +104,11 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final String channel_id = SDK_INT >= O ? n.getChannelId() : null;
 		if (n.tickerText == null/* Legacy misc. notifications */|| CHANNEL_MISC.equals(channel_id)) {
 			if (SDK_INT >= O && channel_id == null) n.setChannelId(CHANNEL_MISC);
-			n.setGroup(GROUP_MISC);		// Avoid being auto-grouped
-			if (SDK_INT < O || ! mOngoingCallTweaker.apply(this, evolving.getOriginalKey(), n))
-				Log.d(TAG, "Skip further process for non-conversation notification: " + title);    // E.g. web login confirmation notification.
-			return true;
+			n.setGroup(GROUP_MISC);        // Avoid being auto-grouped
+
+			if (SDK_INT >= O && isEnabled(mPrefKeyCallTweak) && mOngoingCallTweaker.apply(this, evolving.getOriginalKey(), n)) return true;
+			Log.d(TAG, "Skip further process for non-conversation notification: " + title);    // E.g. web login confirmation notification.
+			return (n.flags & Notification.FLAG_FOREGROUND_SERVICE) == 0;
 		}
 		final CharSequence content_text = extras.getCharSequence(EXTRA_TEXT);
 		if (content_text == null) return true;
@@ -132,7 +134,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final boolean is_group_chat = conversation.isGroupChat();
 
 		extras.putBoolean(Notification.EXTRA_SHOW_WHEN, true);
-		if (mPreferences.getBoolean(mPrefKeyWear, false)) n.flags &= ~ Notification.FLAG_LOCAL_ONLY;
+		if (isEnabled(mPrefKeyWear)) n.flags &= ~ Notification.FLAG_LOCAL_ONLY;
 		if (SDK_INT >= O) {
 			if (is_group_chat && ! CHANNEL_DND.equals(channel_id)) n.setChannelId(CHANNEL_GROUP_CONVERSATION);
 			else if (channel_id == null) n.setChannelId(CHANNEL_MESSAGE);		// WeChat versions targeting O+ have its own channel for message
@@ -169,6 +171,10 @@ public class WeChatDecorator extends NevoDecoratorService {
 		return version != 0 && (mDistinctIdSupported = version >= 1340);	// Distinct ID is supported since WeChat 6.7.3.
 	}
 	private Boolean mDistinctIdSupported;
+
+	private boolean isEnabled(final String mPrefKeyCallTweak) {
+		return mPreferences.getBoolean(mPrefKeyCallTweak, false);
+	}
 
 	@Override protected boolean onNotificationRemoved(final String key, final int reason) {
 		if (reason == REASON_APP_CANCEL) {		// For ongoing notification, or if "Removal-Aware" of Nevolution is activated
@@ -241,9 +247,10 @@ public class WeChatDecorator extends NevoDecoratorService {
 		loadPreferences();
 		migrateFromLegacyPreferences();		// TODO: Remove this IO-blocking migration code (created in Aug, 2019).
 		mPrefKeyWear = getString(R.string.pref_wear);
+		mPrefKeyCallTweak = getString(R.string.pref_call_tweak);
 
 		mMessagingBuilder = new MessagingBuilder(this, mPreferences, this::recastNotification);		// Must be called after loadPreferences().
-		if (SDK_INT >= O) mOngoingCallTweaker = new OngoingCallTweaker(this, mPreferences, this::recastNotification);
+		if (SDK_INT >= O) mOngoingCallTweaker = new OngoingCallTweaker(this, this::recastNotification);
 		final IntentFilter filter = new IntentFilter(Intent.ACTION_PACKAGE_REMOVED); filter.addDataScheme("package");
 		registerReceiver(mPackageEventReceiver, filter);
 		registerReceiver(mSettingsChangedReceiver, new IntentFilter(ACTION_SETTINGS_CHANGED));
@@ -334,6 +341,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private boolean mWeChatTargetingO;
 	private SharedPreferences mPreferences;
 	private String mPrefKeyWear;
+	private String mPrefKeyCallTweak;
 	private final Handler mHandler = new Handler();
 
 	static final String TAG = "Nevo.Decorator[WeChat]";

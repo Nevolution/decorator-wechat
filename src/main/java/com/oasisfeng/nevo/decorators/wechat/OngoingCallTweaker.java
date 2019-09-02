@@ -2,7 +2,6 @@ package com.oasisfeng.nevo.decorators.wechat;
 
 import android.app.Notification;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.media.AudioManager;
 import android.media.AudioRecordingConfiguration;
 import android.media.MediaRecorder;
@@ -30,7 +29,6 @@ import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.TAG;
 
 	boolean apply(final NevoDecoratorService service, final String key, final MutableNotification n) {
 		if ((n.flags & Notification.FLAG_ONGOING_EVENT) == 0) return false;
-		if (! mPreferences.getBoolean(mPrefKeyCallTweak, false)) return false;
 		final CharSequence text_cs = n.extras.getCharSequence(Notification.EXTRA_TEXT);
 		if (text_cs == null) return false;
 		final String text = text_cs.toString();
@@ -75,11 +73,9 @@ import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.TAG;
 		void update(String key, Bundle addition);
 	}
 
-	OngoingCallTweaker(final NevoDecoratorService service, final SharedPreferences preferences, final NotificationUpdater updater) {
+	OngoingCallTweaker(final NevoDecoratorService service, final NotificationUpdater updater) {
 		mContext = service;
 		mUpdater = updater;
-		mPreferences = preferences;
-		mPrefKeyCallTweak = service.getString(R.string.pref_call_tweak);
 	}
 
 	private final AudioManager.AudioRecordingCallback mAudioRecordingCallback = new AudioManager.AudioRecordingCallback() {
@@ -98,7 +94,5 @@ import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.TAG;
 
 	private final Context mContext;
 	private final NotificationUpdater mUpdater;
-	private final SharedPreferences mPreferences;
-	private final String mPrefKeyCallTweak;
 	private String mOngoingKey;
 }
