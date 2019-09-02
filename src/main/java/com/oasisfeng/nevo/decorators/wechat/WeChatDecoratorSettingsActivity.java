@@ -230,7 +230,7 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 
 	private final SharedPreferences.OnSharedPreferenceChangeListener mPreferencesChangeListener = (prefs, key) -> {
 		Log.d(TAG, "Settings changed, notify decorator now.");
-		sendBroadcast(new Intent(WeChatDecorator.ACTION_SETTINGS_CHANGED).setPackage(getPackageName()));
+		sendBroadcast(new Intent(WeChatDecorator.ACTION_SETTINGS_CHANGED).setPackage(getPackageName()).putExtra(key, prefs.getBoolean(key, false)));
 	};
 
 	private final BroadcastReceiver mDummyReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context c, final Intent i) {}};

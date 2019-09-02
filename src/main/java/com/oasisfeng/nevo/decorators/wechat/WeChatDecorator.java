@@ -244,7 +244,9 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	@Override public void onCreate() {
 		super.onCreate();
-		loadPreferences();
+		final Context context = SDK_INT >= N ? createDeviceProtectedStorageContext() : this;
+		//noinspection deprecation
+		mPreferences = context.getSharedPreferences(PREFERENCES_NAME, MODE_MULTI_PROCESS);
 		migrateFromLegacyPreferences();		// TODO: Remove this IO-blocking migration code (created in Aug, 2019).
 		mPrefKeyWear = getString(R.string.pref_wear);
 		mPrefKeyCallTweak = getString(R.string.pref_call_tweak);
@@ -294,12 +296,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 		return START_NOT_STICKY;
 	}
 
-	private void loadPreferences() {
-		final Context context = SDK_INT >= N ? createDeviceProtectedStorageContext() : this;
-		//noinspection deprecation
-		mPreferences = context.getSharedPreferences(PREFERENCES_NAME, MODE_MULTI_PROCESS);
-	}
-
 	private void migrateFromLegacyPreferences() {
 		if (mPreferences.getInt(PREF_KEY_MIGRATED, 0) >= 1) return;
 		final SharedPreferences.Editor editor = mPreferences.edit();
@@ -332,7 +328,12 @@ public class WeChatDecorator extends NevoDecoratorService {
 	}};
 
 	private final BroadcastReceiver mSettingsChangedReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context context, final Intent intent) {
-		loadPreferences();
+		final Bundle extras = intent.getExtras();
+		final Set<String> keys = extras != null ? extras.keySet() : Collections.emptySet();
+		if (keys.isEmpty()) return;
+		final SharedPreferences.Editor editor = mPreferences.edit();
+		for (final String key : keys) editor.putBoolean(key, extras.getBoolean(key)).apply();
+		editor.apply();
 	}};
 
 	private final ConversationManager mConversationManager = new ConversationManager();
