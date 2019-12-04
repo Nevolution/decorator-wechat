@@ -80,6 +80,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private static final String CHANNEL_MISC = "reminder_channel_id";					// Channel ID used by WeChat for misc. notifications
 	private static final String OLD_CHANNEL_MISC = "misc";								//   old name for migration
 	private static final String CHANNEL_DND = "message_dnd_mode_channel_id";			// Channel ID used by WeChat for its own DND mode
+	private static final String CHANNEL_VOIP = "voip_notify_channel_new_id";			// Channel ID used by WeChat for VoIP notification
 	private static final String CHANNEL_GROUP_CONVERSATION = "group";					// WeChat has no separate group for group conversation
 	private static final String GROUP_MISC = "misc";
 
@@ -91,8 +92,10 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	@Override public boolean apply(final MutableStatusBarNotification evolving) {
 		final MutableNotification n = evolving.getNotification();
-		final Bundle extras = n.extras;
+		final int flags = n.flags; final String channel_id = SDK_INT >= O ? n.getChannelId() : null;
+		if ((flags & Notification.FLAG_ONGOING_EVENT) != 0 && CHANNEL_VOIP.equals(channel_id)) return false;
 
+		final Bundle extras = n.extras;
 		CharSequence title = extras.getCharSequence(EXTRA_TITLE);
 		if (title == null || title.length() == 0) {
 			Log.e(TAG, "Title is missing: " + evolving);
@@ -101,7 +104,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (title != (title = EmojiTranslator.translate(title))) extras.putCharSequence(EXTRA_TITLE, title);
 		n.color = PRIMARY_COLOR;        // Tint the small icon
 
-		final String channel_id = SDK_INT >= O ? n.getChannelId() : null;
 		if (n.tickerText == null/* Legacy misc. notifications */|| CHANNEL_MISC.equals(channel_id)) {
 			if (SDK_INT >= O && channel_id == null) n.setChannelId(CHANNEL_MISC);
 			n.setGroup(GROUP_MISC);        // Avoid being auto-grouped
