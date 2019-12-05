@@ -31,7 +31,9 @@ import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Parcel;
 import android.os.Process;
+import android.os.UserHandle;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.service.notification.StatusBarNotification;
@@ -138,8 +140,9 @@ public class WeChatDecorator extends NevoDecoratorService {
 		extras.putBoolean(Notification.EXTRA_SHOW_WHEN, true);
 		if (isEnabled(mPrefKeyWear)) n.flags &= ~ Notification.FLAG_LOCAL_ONLY;
 		if (SDK_INT >= O) {
-			if (is_group_chat && ! CHANNEL_DND.equals(channel_id)) n.setChannelId(CHANNEL_GROUP_CONVERSATION);
-			else if (channel_id == null) n.setChannelId(CHANNEL_MESSAGE);		// WeChat versions targeting O+ have its own channel for message
+			if (is_group_chat && mUseExtraChannels && ! CHANNEL_DND.equals(channel_id))
+				n.setChannelId(CHANNEL_GROUP_CONVERSATION);
+			else if (channel_id == null) n.setChannelId(CHANNEL_MESSAGE);	// WeChat versions targeting O+ have its own channel for message
 		}
 
 		MessagingStyle messaging = mMessagingBuilder.buildFromExtender(conversation, evolving);
@@ -182,12 +185,27 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (reason == REASON_APP_CANCEL) {		// For ongoing notification, or if "Removal-Aware" of Nevolution is activated
 			Log.d(TAG, "Cancel notification: " + key);
 			if (SDK_INT >= O) mOngoingCallTweaker.onNotificationRemoved(key);
-		} else if (reason == REASON_CHANNEL_BANNED) {	// In case WeChat deleted our notification channel for group conversation in Insider delivery mode
-			mHandler.post(() -> reviveNotification(key));
+		} else if (SDK_INT >= O && reason == REASON_CHANNEL_BANNED && ! isChannelAvailable(getUser(key))) {
+			Log.w(TAG, "Channel lost, disable extra channels from now on.");
+			mUseExtraChannels = false;
+			mHandler.post(() -> recastNotification(key, null));
 		} else if (SDK_INT < O || reason == REASON_CANCEL) {	// Exclude the removal request by us in above case. (Removal-Aware is only supported on Android 8+)
 			mMessagingBuilder.markRead(key);
 		}
 		return false;
+	}
+
+	private boolean isChannelAvailable(final UserHandle user) {
+		return getNotificationChannel(WECHAT_PACKAGE, user, CHANNEL_GROUP_CONVERSATION) != null;
+	}
+
+	private static UserHandle getUser(final String key) {
+		final int pos_pipe = key.indexOf('|');
+		if (pos_pipe > 0) try {
+			return userHandleOf(Integer.parseInt(key.substring(0, pos_pipe)));
+		} catch (final NumberFormatException ignored) {}
+		Log.e(TAG, "Invalid key: " + key);
+		return Process.myUserHandle();		// Only correct for single user.
 	}
 
 	@Override protected void onConnected() {
@@ -325,6 +343,20 @@ public class WeChatDecorator extends NevoDecoratorService {
 		return SDK_INT >= N ? PreferenceManager.getDefaultSharedPreferencesName(context) : context.getPackageName() + "_preferences";
 	}
 
+	private static UserHandle userHandleOf(final int user) {
+		final UserHandle current_user = Process.myUserHandle();
+		if (user == current_user.hashCode()) return current_user;
+		if (SDK_INT >= N) UserHandle.getUserHandleForUid(user * 100000 + 1);
+		final Parcel parcel = Parcel.obtain();
+		try {
+			parcel.writeInt(user);
+			parcel.setDataPosition(0);
+			return new UserHandle(parcel);
+		} finally {
+			parcel.recycle();
+		}
+	}
+
 	private final BroadcastReceiver mPackageEventReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context context, final Intent intent) {
 		if (intent.getData() != null && WECHAT_PACKAGE.equals(intent.getData().getSchemeSpecificPart())) mDistinctIdSupported = null;
 	}};
@@ -342,6 +374,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private MessagingBuilder mMessagingBuilder;
 	private @RequiresApi(O) OngoingCallTweaker mOngoingCallTweaker;
 	private boolean mWeChatTargetingO;
+	private boolean mUseExtraChannels = true;	// Extra channels should not be used in Insider mode, as WeChat always removes channels not maintained by itself.
 	private SharedPreferences mPreferences;
 	private String mPrefKeyWear;
 	private String mPrefKeyCallTweak;
