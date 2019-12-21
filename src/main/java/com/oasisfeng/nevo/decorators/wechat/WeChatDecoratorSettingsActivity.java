@@ -54,6 +54,7 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 	private static final String ANDROID_AUTO_PACKAGE = "com.google.android.projection.gearhead";
 	private static final String AGENT_WECHAT_PACKAGE = "com.oasisfeng.nevo.agents.wechat";
 	private static final String PLAY_STORE_PACKAGE = "com.android.vending";
+    private static final String ISLAND_PACKAGE = "com.oasisfeng.island";
 	private static final String APP_MARKET_PREFIX = "market://details?id=";
 
 	@Override protected void onCreate(@Nullable final Bundle savedInstanceState) {
@@ -101,12 +102,13 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 			}
 		}
 		preference_extension.setEnabled(wechat_installed);
-		preference_extension.setSelectable(! android_auto_available);
+		preference_extension.setSelectable(! android_auto_available || ! android_auto_unavailable_in_profiles.isEmpty());
 		preference_extension.setSummary(! android_auto_available ? getText(R.string.pref_extension_summary)
 				: android_auto_unavailable_in_profiles.isEmpty() ? getText(R.string.pref_extension_summary_installed)
 				: getString(R.string.pref_extension_summary_not_cloned_in_island,
 				profiles.size() <= 2/* Just one Island space */? "" : android_auto_unavailable_in_profiles.toString()));
-		preference_extension.setOnPreferenceClickListener(android_auto_available ? null : this::installExtension);
+		preference_extension.setOnPreferenceClickListener(! android_auto_available ? this::installExtension
+                : ! android_auto_unavailable_in_profiles.isEmpty() ? this::showExtensionInIsland : null);
 
 		final Preference preference_agent = findPreference(getString(R.string.pref_agent));
 		final int agent_version = getPackageVersion(AGENT_WECHAT_PACKAGE);
@@ -191,6 +193,13 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		} else installDummyAuto();
 		return true;
 	}
+
+	@SuppressLint("InlinedApi") private boolean showExtensionInIsland(@SuppressWarnings("unused") final Preference unused) {
+	    try {
+            startActivity(new Intent(Intent.ACTION_SHOW_APP_INFO).putExtra(Intent.EXTRA_PACKAGE_NAME, ANDROID_AUTO_PACKAGE).setPackage(ISLAND_PACKAGE));
+        } catch (final Exception ignored) {}
+	    return true;
+    }
 
 	private void showAndroidAutoInPlayStore() {
 		try {

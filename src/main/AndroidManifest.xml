@@ -32,8 +32,8 @@
                 <action android:name="com.oasisfeng.nevo.Decorator" />
             </intent-filter>
             <meta-data android:name="packages" android:value="com.tencent.mm" />
-            <meta-data android:name="settings.receiver" android:value="WeChatDecoratorSettingsReceiver" />
             <meta-data android:name="hint_include_sticky" android:value="true" />
+            <meta-data android:name="settings.activity" android:value="WeChatDecoratorSettingsActivity" />
         </service>
 
         <receiver android:name=".WeChatDecoratorSettingsReceiver"
@@ -46,18 +46,7 @@
             android:label="@string/decorator_wechat_title"
             android:taskAffinity=""
             android:theme="@android:style/Theme.Material.Light"
-            android:process=":ui">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity> <!-- Can be disabled in settings to hide launcher entrance -->
-
-        <activity-alias
-            android:name=".WeChatDecoratorSettingsActivity_"
-            android:targetActivity=".WeChatDecoratorSettingsActivity"
-            android:label="@string/decorator_wechat_title" /> <!-- Alternate launch entrance for WeChatDecoratorSettingsReceiver -->
+            android:process=":ui" />
 
         <provider android:name=".AssetFileProvider"
             android:authorities="com.oasisfeng.nevo.decorators.wechat.files"
