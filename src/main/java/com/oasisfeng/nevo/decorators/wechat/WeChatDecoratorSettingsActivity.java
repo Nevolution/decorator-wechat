@@ -10,21 +10,28 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.LauncherApps;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Process;
+import android.os.UserHandle;
+import android.os.UserManager;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceManager;
 import android.preference.TwoStatePreference;
 import android.support.annotation.Nullable;
+import android.support.annotation.RequiresApi;
 import android.support.annotation.StringRes;
 import android.util.Log;
 
 import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION;
@@ -81,9 +88,24 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 
 		final Preference preference_extension = findPreference(getString(R.string.pref_extension));
 		final boolean android_auto_available = getPackageVersion(ANDROID_AUTO_PACKAGE) >= 0;
+		final List<Integer> android_auto_unavailable_in_profiles = new ArrayList<>();
+		List<UserHandle> profiles = Collections.emptyList();
+		if (SDK_INT >= N) {
+			final UserManager um = getSystemService(UserManager.class);
+			final LauncherApps la = getSystemService(LauncherApps.class);
+			if (um != null && la != null) for (final UserHandle profile : (profiles = um.getUserProfiles())) {
+				if (profile.equals(Process.myUserHandle())) continue;
+				if (getApplicationInfo(la, WECHAT_PACKAGE, profile) == null) continue;
+				if (getApplicationInfo(la, ANDROID_AUTO_PACKAGE, profile) == null)
+					android_auto_unavailable_in_profiles.add(profile.hashCode());
+			}
+		}
 		preference_extension.setEnabled(wechat_installed);
 		preference_extension.setSelectable(! android_auto_available);
-		preference_extension.setSummary(android_auto_available ? R.string.pref_extension_summary_installed : R.string.pref_extension_summary);
+		preference_extension.setSummary(! android_auto_available ? getText(R.string.pref_extension_summary)
+				: android_auto_unavailable_in_profiles.isEmpty() ? getText(R.string.pref_extension_summary_installed)
+				: getString(R.string.pref_extension_summary_not_cloned_in_island,
+				profiles.size() <= 2/* Just one Island space */? "" : android_auto_unavailable_in_profiles.toString()));
 		preference_extension.setOnPreferenceClickListener(android_auto_available ? null : this::installExtension);
 
 		final Preference preference_agent = findPreference(getString(R.string.pref_agent));
@@ -195,6 +217,13 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		} catch (final NameNotFoundException e) {
 			return -1;
 		}
+	}
+
+	@RequiresApi(N) @SuppressLint("NewApi")
+	private static ApplicationInfo getApplicationInfo(final LauncherApps la, final String pkg, final UserHandle profile) {
+		try {
+			return la.getApplicationInfo(pkg, 0, profile);
+		} catch (final NameNotFoundException e) { return null; }
 	}
 
 	@Override protected void onDestroy() {

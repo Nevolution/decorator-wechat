@@ -36,6 +36,7 @@
     <string name="pref_extension_title">特性扩展包</string>
     <string name="pref_extension_summary">添加更多特性（快捷回复、划掉标记已读 等）</string>
     <string name="pref_extension_summary_installed">已安装</string>
+    <string name="pref_extension_summary_not_cloned_in_island">壶中界%s 内未克隆</string>
     <string name="prompt_extension_install">你有两个选项：安装完整版的 Android Auto（消耗较多空间），或者“极简包”。如果你不需要使用 Android Auto 或者不清楚它是什么，建议选择“极简包”。</string>
     <string name="action_install_android_auto">安装 Android Auto</string>
     <string name="action_install_dummy_auto">安装极简包</string>
