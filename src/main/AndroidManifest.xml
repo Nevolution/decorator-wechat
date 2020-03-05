@@ -45,7 +45,7 @@
             android:name=".WeChatDecoratorSettingsActivity"
             android:label="@string/decorator_wechat_title"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.Material.Light"
+            android:theme="@style/Theme.DayNight"
             android:process=":ui" />
 
         <provider android:name=".AssetFileProvider"
