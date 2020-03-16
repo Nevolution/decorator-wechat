@@ -36,7 +36,6 @@ import android.os.Process;
 import android.os.UserHandle;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
-import android.service.notification.StatusBarNotification;
 import android.support.annotation.ColorInt;
 import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
@@ -51,11 +50,9 @@ import com.oasisfeng.nevo.sdk.MutableStatusBarNotification;
 import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -76,35 +73,36 @@ import static android.service.notification.NotificationListenerService.REASON_CH
 public class WeChatDecorator extends NevoDecoratorService {
 
 	public static final String WECHAT_PACKAGE = "com.tencent.mm";
-	static final String CHANNEL_MESSAGE = "message_channel_new_id";						// Channel ID used by WeChat for all message notifications
+	static final String CHANNEL_MESSAGE = "message_channel_new_id";				// Channel ID used by WeChat for all message notifications
 	private static final int MAX_NUM_ARCHIVED = 20;
-	private static final String OLD_CHANNEL_MESSAGE = "message";						//   old name for migration
-	private static final String CHANNEL_MISC = "reminder_channel_id";					// Channel ID used by WeChat for misc. notifications
-	private static final String OLD_CHANNEL_MISC = "misc";								//   old name for migration
-	private static final String CHANNEL_DND = "message_dnd_mode_channel_id";			// Channel ID used by WeChat for its own DND mode
-	private static final String CHANNEL_VOIP = "voip_notify_channel_new_id";			// Channel ID used by WeChat for VoIP notification
-	private static final String CHANNEL_GROUP_CONVERSATION = "group";					// WeChat has no separate group for group conversation
+	private static final String OLD_CHANNEL_MESSAGE = "message";				//   old name for migration
+	private static final String CHANNEL_MISC = "reminder_channel_id";			// Channel ID used by WeChat for misc. notifications
+	private static final String OLD_CHANNEL_MISC = "misc";						//   old name for migration
+	private static final String CHANNEL_DND = "message_dnd_mode_channel_id";	// Channel ID used by WeChat for its own DND mode
+	private static final String CHANNEL_VOIP = "voip_notify_channel_new_id";	// Channel ID used by WeChat for VoIP notification
+	private static final String CHANNEL_GROUP_CONVERSATION = "group";			// WeChat has no separate group for group conversation
 	private static final String GROUP_MISC = "misc";
 
 	private static final @ColorInt int PRIMARY_COLOR = 0xFF33B332;
 	private static final @ColorInt int LIGHT_COLOR = 0xFF00FF00;
 	static final String ACTION_SETTINGS_CHANGED = "SETTINGS_CHANGED";
-	static final String ACTION_DEBUG_NOTIFICATION = "DEBUG";
 	static final String PREFERENCES_NAME = "decorators-wechat";
 
 	@Override public boolean apply(final MutableStatusBarNotification evolving) {
 		final MutableNotification n = evolving.getNotification();
-		final int flags = n.flags; final String channel_id = SDK_INT >= O ? n.getChannelId() : null;
-		if ((flags & Notification.FLAG_ONGOING_EVENT) != 0 && CHANNEL_VOIP.equals(channel_id)) return false;
-
 		final Bundle extras = n.extras;
 		CharSequence title = extras.getCharSequence(EXTRA_TITLE);
 		if (title == null || title.length() == 0) {
 			Log.e(TAG, "Title is missing: " + evolving);
 			return false;
 		}
+		final int flags = n.flags; final String channel_id = SDK_INT >= O ? n.getChannelId() : null;
+		if ((flags & Notification.FLAG_ONGOING_EVENT) != 0 && CHANNEL_VOIP.equals(channel_id)) return false;
+
 		if (title != (title = EmojiTranslator.translate(title))) extras.putCharSequence(EXTRA_TITLE, title);
 		n.color = PRIMARY_COLOR;        // Tint the small icon
+		extras.putBoolean(Notification.EXTRA_SHOW_WHEN, true);
+		if (isEnabled(mPrefKeyWear)) n.flags &= ~ Notification.FLAG_LOCAL_ONLY;
 
 		if (n.tickerText == null/* Legacy misc. notifications */|| CHANNEL_MISC.equals(channel_id)) {
 			if (SDK_INT >= O && channel_id == null) n.setChannelId(CHANNEL_MISC);
@@ -117,6 +115,9 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final CharSequence content_text = extras.getCharSequence(EXTRA_TEXT);
 		if (content_text == null) return true;
 
+		if (SDK_INT >= N && extras.getCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY) != null)
+			n.flags |= Notification.FLAG_ONLY_ALERT_ONCE;		// No more alert for direct-replied notification.
+
 		// WeChat previously uses dynamic counter starting from 4097 as notification ID, which is reused after cancelled by WeChat itself,
 		//   causing conversation duplicate or overwritten notifications.
 		final String pkg = evolving.getPackageName();
@@ -124,8 +125,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (! isDistinctId(n, pkg)) {
 			final int title_hash = title.hashCode();	// Not using the hash code of original title, which might have already evolved.
 			evolving.setId(title_hash);
-			conversation = mConversationManager.getConversation(title_hash);
-		} else conversation = mConversationManager.getConversation(evolving.getOriginalId());
+			conversation = mConversationManager.getOrCreateConversation(title_hash);
+		} else conversation = mConversationManager.getOrCreateConversation(evolving.getOriginalId());
 
 		final Icon icon = n.getLargeIcon();
 		conversation.icon = icon != null ? IconCompat.createFromIcon(this, icon) : null;
@@ -133,17 +134,10 @@ public class WeChatDecorator extends NevoDecoratorService {
 		conversation.summary = content_text;
 		conversation.ticker = n.tickerText;
 		conversation.timestamp = n.when;
-		if (conversation.getType() == Conversation.TYPE_UNKNOWN)
-			conversation.setType(WeChatMessage.guessConversationType(conversation));
-		final boolean is_group_chat = conversation.isGroupChat();
+		conversation.ext = new Notification.CarExtender(n).getUnreadConversation();
 
-		extras.putBoolean(Notification.EXTRA_SHOW_WHEN, true);
-		if (isEnabled(mPrefKeyWear)) n.flags &= ~ Notification.FLAG_LOCAL_ONLY;
-		if (SDK_INT >= O) {
-			if (is_group_chat && mUseExtraChannels && ! CHANNEL_DND.equals(channel_id))
-				n.setChannelId(CHANNEL_GROUP_CONVERSATION);
-			else if (channel_id == null) n.setChannelId(CHANNEL_MESSAGE);	// WeChat versions targeting O+ have its own channel for message
-		}
+		if (conversation.isTypeUnknown())
+			conversation.setType(WeChatMessage.guessConversationType(conversation));    // mMessagingBuilder replies on the type
 
 		MessagingStyle messaging = mMessagingBuilder.buildFromExtender(conversation, evolving);
 		if (messaging == null)	// EXTRA_TEXT will be written in buildFromArchive()
@@ -152,12 +146,17 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final List<MessagingStyle.Message> messages = messaging.getMessages();
 		if (messages.isEmpty()) return true;
 
+		final boolean is_group_chat = conversation.isGroupChat();
+
+		if (SDK_INT >= O) {
+			if (is_group_chat && mUseExtraChannels && ! CHANNEL_DND.equals(channel_id))
+				n.setChannelId(CHANNEL_GROUP_CONVERSATION);
+			else if (channel_id == null) n.setChannelId(CHANNEL_MESSAGE);	// WeChat versions targeting O+ have its own channel for message
+		}
+
 		if (is_group_chat) messaging.setGroupConversation(true).setConversationTitle(title);
 		MessagingBuilder.flatIntoExtras(messaging, extras);
 		extras.putString(Notification.EXTRA_TEMPLATE, TEMPLATE_MESSAGING);
-
-		if (SDK_INT >= N && extras.getCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY) != null)
-			n.flags |= Notification.FLAG_ONLY_ALERT_ONCE;		// No more alert for direct-replied notification.
 		return true;
 	}
 
@@ -271,7 +270,14 @@ public class WeChatDecorator extends NevoDecoratorService {
 		mPrefKeyWear = getString(R.string.pref_wear);
 		mPrefKeyCallTweak = getString(R.string.pref_call_tweak);
 
-		mMessagingBuilder = new MessagingBuilder(this, mPreferences, this::recastNotification);		// Must be called after loadPreferences().
+		mMessagingBuilder = new MessagingBuilder(this, mPreferences, new MessagingBuilder.Controller() {
+			@Override public void recastNotification(final String key, final Bundle addition) {
+				WeChatDecorator.this.recastNotification(key, addition);
+			}
+			@Override public Conversation getConversation(final int id) {
+				return mConversationManager.getConversation(id);
+			}
+		});	// Must be called after loadPreferences().
 		if (SDK_INT >= O) mOngoingCallTweaker = new OngoingCallTweaker(this, this::recastNotification);
 		final IntentFilter filter = new IntentFilter(Intent.ACTION_PACKAGE_REMOVED); filter.addDataScheme("package");
 		registerReceiver(mPackageEventReceiver, filter);
@@ -284,36 +290,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (SDK_INT >= O) mOngoingCallTweaker.close();
 		mMessagingBuilder.close();
 		super.onDestroy();
-	}
-
-	@Override public int onStartCommand(final Intent intent, final int flags, final int startId) {
-		String tag = null; int id = 0;
-		if (SDK_INT >= O && BuildConfig.DEBUG && ACTION_DEBUG_NOTIFICATION.equals(intent.getAction())) try {
-			tag = intent.getStringExtra(Notification.EXTRA_NOTIFICATION_TAG);
-			id = intent.getIntExtra(Notification.EXTRA_NOTIFICATION_ID, 0);
-			@SuppressWarnings("deprecation") final String key = new StatusBarNotification(WECHAT_PACKAGE, null, id, tag, getPackageManager()
-					.getPackageUid(WECHAT_PACKAGE, 0), 0, 0, new Notification(), Process.myUserHandle(), 0).getKey();
-			final StatusBarNotification sbn = getLatestNotifications(Collections.singletonList(key)).get(0);
-			final Notification n = sbn.getNotification();
-			final Notification.CarExtender.UnreadConversation conversation = new Notification.CarExtender(n).getUnreadConversation();
-			if (conversation != null) {
-				final String[] lines = Arrays.copyOf(conversation.getMessages(), conversation.getMessages().length + 2);
-				final long t = conversation.getLatestTimestamp();
-				lines[lines.length - 2] = "TS:" + (t == 0 ? "00" : t - n.when) + ",P:" + conversation.getParticipant();
-				lines[lines.length - 1] = n.tickerText != null ? n.tickerText.toString() : null;
-				n.extras.putCharSequenceArray(Notification.EXTRA_TEXT_LINES, lines);
-				n.extras.putString(Notification.EXTRA_TEMPLATE, Notification.InboxStyle.class.getName());
-			} else {
-				if (n.tickerText != null) n.extras.putCharSequence(Notification.EXTRA_BIG_TEXT, n.extras.getCharSequence(EXTRA_TEXT) + "\n" + n.tickerText);
-				n.extras.putString(Notification.EXTRA_TEMPLATE, Notification.BigTextStyle.class.getName());
-			}
-			final NotificationManager nm = Objects.requireNonNull(getSystemService(NotificationManager.class));
-			nm.createNotificationChannel(new NotificationChannel(n.getChannelId(), "Debug:" + n.getChannelId(), NotificationManager.IMPORTANCE_LOW));
-			nm.notify(tag, id, n);
-		} catch (final PackageManager.NameNotFoundException | RuntimeException e) {
-			Log.e(TAG, "Error debugging notification, id=" + id + ", tag=" + tag, e);
-		}
-		return START_NOT_STICKY;
 	}
 
 	private void migrateFromLegacyPreferences() {

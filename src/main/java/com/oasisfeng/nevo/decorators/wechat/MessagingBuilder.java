@@ -3,6 +3,8 @@ package com.oasisfeng.nevo.decorators.wechat;
 import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.Notification.Action;
+import android.app.Notification.BigTextStyle;
+import android.app.Notification.Builder;
 import android.app.Notification.CarExtender;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -69,6 +71,7 @@ class MessagingBuilder {
 	private static final String EXTRA_RESULT_KEY = "result_key";
 	private static final String EXTRA_ORIGINAL_KEY = "original_key";
 	private static final String EXTRA_REPLY_PREFIX = "reply_prefix";
+	private static final String EXTRA_CONVERSATION_ID = "cid";
 
 	private static final String KEY_TEXT = "text";
 	private static final String KEY_TIMESTAMP = "time";
@@ -127,54 +130,51 @@ class MessagingBuilder {
 		final MessagingStyle messaging = new MessagingStyle(mUserSelf);
 		final boolean sender_inline = num_lines_with_colon == lines.size();
 		for (int i = 0, size = lines.size(); i < size; i ++) {            // All lines have colon in text
-			final Pair<CharSequence, CharSequence> line = lines.valueAt(i);
+			final Pair<CharSequence/* Text */, CharSequence/* Ticker */> line = lines.valueAt(i);
 			messaging.addMessage(buildMessage(conversation, lines.keyAt(i), line.second, line.first, sender_inline ? null : title.toString()));
 		}
 		return messaging;
 	}
 
 	@Nullable MessagingStyle buildFromExtender(final Conversation conversation, final MutableStatusBarNotification sbn) {
+		final CarExtender.UnreadConversation ext = conversation.ext;
+		if (ext == null) return null;
 		final MutableNotification n = sbn.getNotification();
-		final Notification.CarExtender extender = new Notification.CarExtender(n);
-		final CarExtender.UnreadConversation convs = extender.getUnreadConversation();
-		if (convs == null) return null;
-		final long latest_timestamp = convs.getLatestTimestamp();
+		final long latest_timestamp = ext.getLatestTimestamp();
 		if (latest_timestamp > 0) n.when = conversation.timestamp = latest_timestamp;
 
-		final PendingIntent on_reply = convs.getReplyPendingIntent();
-		if (conversation.key == null) try {
-			if (on_reply != null) on_reply.send(mContext, 0, null, (p, intent, r, d, b) -> {
-				final String key = conversation.key = intent.getStringExtra(KEY_USERNAME);	// setType() below will trigger rebuilding of conversation sender.
+		final PendingIntent on_reply = ext.getReplyPendingIntent(); final String n_key = sbn.getKey();
+		if (conversation.key == null && on_reply != null) try {
+			final PendingIntent.OnFinished callback = (p, intent, r, d, b) -> {
+				final String key = conversation.key = intent.getStringExtra(KEY_USERNAME);    // setType() below will trigger rebuilding of conversation sender.
 				if (key == null) return;
-				final int detected_type = key.endsWith("@chatroom") || key.endsWith("@im.chatroom"/* WeWork */)
-						? Conversation.TYPE_GROUP_CHAT : key.startsWith("gh_") ? Conversation.TYPE_BOT_MESSAGE : Conversation.TYPE_DIRECT_MESSAGE;
-				final int previous_type = conversation.setType(detected_type);
-				if (BuildConfig.DEBUG && SDK_INT >= O && previous_type != Conversation.TYPE_UNKNOWN && detected_type != previous_type) {
-					final Notification clone = n.clone();
-					final Notification.Builder dn = Notification.Builder.recoverBuilder(mContext, clone)
-							.setStyle(new Notification.BigTextStyle().bigText(clone.tickerText)).setSubText("Type " + detected_type + " << " + previous_type);
-					requireNonNull(mContext.getSystemService(NotificationManager.class)).notify(key.hashCode(), dn.setChannelId(n.getChannelId()).build());
+				final int type = key.endsWith("@chatroom") || key.endsWith("@im.chatroom"/* WeWork */) ? Conversation.TYPE_GROUP_CHAT
+						: key.startsWith("gh_") ? Conversation.TYPE_BOT_MESSAGE : Conversation.TYPE_DIRECT_MESSAGE; // TODO: "...@openim" for WeWork direct message
+				final int previous_type = conversation.setType(type);
+				if (BuildConfig.DEBUG && type != previous_type
+						&& (previous_type != Conversation.TYPE_UNKNOWN || type != Conversation.TYPE_DIRECT_MESSAGE)) {
+					if (SDK_INT >= O) showDebugNotification(conversation, "Type " + type + " << " + previous_type);
 				}
-			}, null);
+			};
+			on_reply.send(mContext, 0, new Intent(""/* noop */), callback, null);
 		} catch (final PendingIntent.CanceledException e) {
 			Log.e(TAG, "Error parsing reply intent.", e);
 		}
 
-		final MessagingStyle messaging = new MessagingStyle(mUserSelf);
-		final Message[] messages = WeChatMessage.buildFromCarConversation(conversation, convs);
-		for (final Message message : messages) messaging.addMessage(message);
-
-		final PendingIntent on_read = convs.getReadPendingIntent();
+		final PendingIntent on_read = ext.getReadPendingIntent();
 		if (on_read != null) mMarkReadPendingIntents.put(sbn.getKey(), on_read);	// Mapped by evolved key,
 
+		final Message[] messages = WeChatMessage.buildMessages(conversation);
+
 		final RemoteInput remote_input;
-		if (SDK_INT >= N && on_reply != null && (remote_input = convs.getRemoteInput()) != null) {
+		if (SDK_INT >= N && on_reply != null && (remote_input = ext.getRemoteInput()) != null && conversation.isChat()) {
 			final CharSequence[] input_history = n.extras.getCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY);
-			final PendingIntent proxy = proxyDirectReply(sbn, on_reply, remote_input, input_history, null);
+			final PendingIntent proxy = proxyDirectReply(conversation.id, sbn, on_reply, remote_input, input_history, null);
 			final RemoteInput.Builder reply_remote_input = new RemoteInput.Builder(remote_input.getResultKey()).addExtras(remote_input.getExtras())
-					.setAllowFreeFormInput(true).setChoices(SmartReply.generateChoices(messaging));
-			final String participant = convs.getParticipant();	// No need to getParticipants() due to actually only one participant at most, see CarExtender.Builder().
-			if (participant != null) reply_remote_input.setLabel(participant);
+					.setAllowFreeFormInput(true).setChoices(SmartReply.generateChoices(messages));
+			final String participant = ext.getParticipant();	// No need to getParticipants() due to actually only one participant at most, see CarExtender.Builder().
+			if (BuildConfig.DEBUG && conversation.key != null) reply_remote_input.setLabel(conversation.key);
+			else if (participant != null) reply_remote_input.setLabel(participant);
 
 			final Action.Builder reply_action = new Action.Builder(null, mContext.getString(R.string.action_reply), proxy)
 					.addRemoteInput(reply_remote_input.build()).setAllowGeneratedReplies(true);
@@ -184,13 +184,28 @@ class MessagingBuilder {
 			if (conversation.isGroupChat() && mPreferences.getBoolean(mPrefKeyMentionAction, false)) {
 				final Person last_sender = messages[messages.length - 1].getPerson();
 				if (last_sender != null && last_sender != mUserSelf) {
-					final String label = "@" + last_sender.getName(), prefix = "@" + Conversation.getOriginalName(last_sender) + MENTION_SEPARATOR;
-					n.addAction(new Action.Builder(null, label, proxyDirectReply(sbn, on_reply, remote_input, input_history, prefix))
-							.addRemoteInput(reply_remote_input.setLabel(label).build()).setAllowGeneratedReplies(true).build());
+					final String label = "@" + last_sender.getName();
+					final String prefix = "@" + Conversation.getOriginalName(last_sender) + MENTION_SEPARATOR;
+					final PendingIntent intent = proxyDirectReply(conversation.id, sbn, on_reply, remote_input, input_history, prefix);
+					n.addAction(new Action.Builder(null, label, intent).setAllowGeneratedReplies(true)
+							.addRemoteInput(reply_remote_input.setLabel(label).build()).build());
 				}
 			}
 		}
+
+		final MessagingStyle messaging = new MessagingStyle(mUserSelf);
+		for (final Message message : messages) messaging.addMessage(message);
 		return messaging;
+	}
+
+	@RequiresApi(O) private void showDebugNotification(final Conversation conversation, final @Nullable String summary) {
+		final StringBuilder bigText = new StringBuilder().append(conversation.summary).append("\nT:").append(conversation.ticker);
+		final String[] messages = conversation.ext.getMessages();
+		if (messages != null) for (final String msg : messages) bigText.append("\n").append(msg);
+		final Builder n = new Builder(mContext, "Debug").setSmallIcon(android.R.drawable.stat_sys_warning)
+				.setContentTitle(conversation.key).setContentText(conversation.ticker).setSubText(summary).setShowWhen(true)
+				.setStyle(new BigTextStyle().setBigContentTitle(conversation.title).bigText(bigText.toString()));
+		requireNonNull(mContext.getSystemService(NotificationManager.class)).notify(conversation.key.hashCode(), n.build());
 	}
 
 	private static Message buildMessage(final Conversation conversation, final long when, final @Nullable CharSequence ticker,
@@ -241,11 +256,12 @@ class MessagingBuilder {
 	}
 
 	/** Intercept the PendingIntent in RemoteInput to update the notification with replied message upon success. */
-	private PendingIntent proxyDirectReply(final MutableStatusBarNotification sbn, final PendingIntent on_reply, final RemoteInput remote_input,
-										   final @Nullable CharSequence[] input_history, final @Nullable String mention_prefix) {
+	private PendingIntent proxyDirectReply(final int cid, final MutableStatusBarNotification sbn, final PendingIntent on_reply,
+			final RemoteInput remote_input, final @Nullable CharSequence[] input_history, final @Nullable String mention_prefix) {
 		final Intent proxy = new Intent(mention_prefix != null ? ACTION_MENTION : ACTION_REPLY)		// Separate action to avoid PendingIntent overwrite.
+				.setData(Uri.fromParts(SCHEME_KEY, sbn.getKey(), null))
 				.putExtra(EXTRA_REPLY_ACTION, on_reply).putExtra(EXTRA_RESULT_KEY, remote_input.getResultKey())
-				.setData(Uri.fromParts(SCHEME_KEY, sbn.getKey(), null)).putExtra(EXTRA_ORIGINAL_KEY, sbn.getOriginalKey());
+				.putExtra(EXTRA_ORIGINAL_KEY, sbn.getOriginalKey()).putExtra(EXTRA_CONVERSATION_ID, cid);
 		if (mention_prefix != null) proxy.putExtra(EXTRA_REPLY_PREFIX, mention_prefix);
 		if (SDK_INT >= N && input_history != null)
 			proxy.putCharSequenceArrayListExtra(EXTRA_REMOTE_INPUT_HISTORY, new ArrayList<>(Arrays.asList(input_history)));
@@ -258,6 +274,14 @@ class MessagingBuilder {
 		final Uri data = proxy_intent.getData(); final Bundle results = RemoteInput.getResultsFromIntent(proxy_intent);
 		final CharSequence input = results != null ? results.getCharSequence(result_key) : null;
 		if (data == null || reply_action == null || result_key == null || input == null) return;	// Should never happen
+
+		final String key = data.getSchemeSpecificPart(), original_key = proxy_intent.getStringExtra(EXTRA_ORIGINAL_KEY);
+		if (BuildConfig.DEBUG && SDK_INT >= O && "debug".equals(input.toString())) {
+			final Conversation conversation = mController.getConversation(proxy_intent.getIntExtra(EXTRA_CONVERSATION_ID, 0));
+			if (conversation != null) showDebugNotification(conversation, null);
+			mController.recastNotification(original_key != null ? original_key : key, null);
+			return;
+		}
 		final CharSequence text;
 		if (reply_prefix != null) {
 			text = reply_prefix + input;
@@ -265,7 +289,6 @@ class MessagingBuilder {
 			RemoteInput.addResultsToIntent(new RemoteInput[]{ new RemoteInput.Builder(result_key).build() }, proxy_intent, results);
 		} else text = input;
 		final ArrayList<CharSequence> input_history = SDK_INT >= N ? proxy_intent.getCharSequenceArrayListExtra(EXTRA_REMOTE_INPUT_HISTORY) : null;
-		final String key = data.getSchemeSpecificPart(), original_key = proxy_intent.getStringExtra(EXTRA_ORIGINAL_KEY);
 		try {
 			final Intent input_data = addTargetPackageAndWakeUp(reply_action);
 			input_data.setClipData(proxy_intent.getClipData());
@@ -346,7 +369,10 @@ class MessagingBuilder {
 		return user.toAndroidPerson();
 	}
 
-	interface Controller { void recastNotification(String key, Bundle addition); }
+	interface Controller {
+		void recastNotification(String key, Bundle addition);
+		Conversation getConversation(int title_hash);
+	}
 
 	MessagingBuilder(final Context context, final SharedPreferences preferences, final Controller controller) {
 		mContext = context;

@@ -1,5 +1,6 @@
 package com.oasisfeng.nevo.decorators.wechat;
 
+import android.app.Notification;
 import android.support.annotation.IntDef;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -43,8 +44,7 @@ class ConversationManager {
 		long timestamp;
 		IconCompat icon;
 		private @Nullable Person.Builder sender;
-
-		int getType() { return mType; }
+		Notification.CarExtender.UnreadConversation ext;    // Of the latest notification
 
 		/** @return previous type */
 		int setType(final int type) {
@@ -73,6 +73,10 @@ class ConversationManager {
 		}
 
 		boolean isGroupChat() { return mType == TYPE_GROUP_CHAT; }
+		boolean isBotMessage() { return mType == TYPE_BOT_MESSAGE; }
+		boolean isTypeUnknown() { return mType == TYPE_UNKNOWN; }
+
+		boolean isChat() { return ticker != null && TextUtils.indexOf(ticker, ':') > 0; }
 
 		Person getGroupParticipant(final String key, final String name) {
 			if (! isGroupChat()) throw new IllegalStateException("Not group chat");
@@ -96,10 +100,14 @@ class ConversationManager {
 		private final Map<String, Person> mParticipants = new ArrayMap<>();
 	}
 
-	Conversation getConversation(final int id) {
+	Conversation getOrCreateConversation(final int id) {
 		Conversation conversation = mConversations.get(id);
 		if (conversation == null) mConversations.put(id, conversation = new Conversation(id));
 		return conversation;
+	}
+
+	Conversation getConversation(final int id) {
+		return mConversations.get(id);
 	}
 
 	private final SparseArray<Conversation> mConversations = new SparseArray<>();

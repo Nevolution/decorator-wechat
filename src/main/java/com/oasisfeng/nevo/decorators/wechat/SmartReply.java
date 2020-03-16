@@ -1,10 +1,8 @@
 package com.oasisfeng.nevo.decorators.wechat;
 
-import android.support.v4.app.NotificationCompat.MessagingStyle;
+import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat.MessagingStyle.Message;
 import android.text.TextUtils;
-
-import java.util.List;
 
 /**
  * A no-smart implementation for Smart Reply
@@ -15,10 +13,9 @@ class SmartReply {
 
 	private static final CharSequence[][] REPLIES_FOR_QUESTION = {{ "👌", "好", "对", "没问题" }, { "👌", "OK", "Ye" }};
 
-	static CharSequence[] generateChoices(final MessagingStyle messaging) {
-		final List<Message> messages = messaging.getMessages();
-		if (messages.isEmpty()) return null;
-		final CharSequence text = messages.get(messages.size() - 1).getText();
+	static @Nullable CharSequence[] generateChoices(final Message[] messages) {
+		if (messages.length == 0) return null;
+		final CharSequence text = messages[messages.length - 1].getText();
 		final boolean chinese;
 		if ((chinese = TextUtils.indexOf(text, '？') >= 0) || TextUtils.indexOf(text, '?') >= 0)
 			return REPLIES_FOR_QUESTION[chinese ? 0 : 1];

@@ -1,6 +1,5 @@
 package com.oasisfeng.nevo.decorators.wechat;
 
-import android.app.Notification;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat.MessagingStyle.Message;
 import android.support.v4.app.Person;
@@ -16,12 +15,12 @@ import static com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.TAG;
  *
  * Known cases
  * -------------
- *  Direct message with 1 unread	Ticker: "Oasis: Hello",			Title: "Oasis",	Summary: "Hello"
- *  Direct message with >1 unread	Ticker: "Oasis: [Link] WTF",	Title: "Oasis",	Summary: "[2]Oasis: [Link] WTF"
- *  Service message with 1 unread	Ticker: "FedEx: [Link] Status",	Title: "FedEx",	Summary: "[Link] Status"			CarMessage: "[Link] Status"
- *  Service message with >1 unread	Ticker: "FedEx: Delivered",		Title: "FedEx",	Summary: "[2]FedEx: Delivered"		CarMessage: "[Link] Delivered"
- *  Group chat with 1 unread		Ticker: "GroupNick: Hello",		Title: "Group",	Summary: "GroupNick: Hello"			CarMessage: "GroupNick: Hello"
- *  Group chat with >1 unread		Ticker: "GroupNick: [Link] Mm",	Title: "Group",	Summary: "[2]GroupNick: [Link] Mm"	CarMessage: "GroupNick: [Link] Mm"
+ *  Direct message   1 unread  Ticker: "Oasis: Hello",         Title: "Oasis",  Summary: "Hello"                    CarExt: "Hello"
+ *  Direct message  >1 unread  Ticker: "Oasis: [Link] WTF",    Title: "Oasis",  Summary: "[2]Oasis: [Link] WTF"
+ *  Service message  1 unread  Ticker: "FedEx: [Link] Status", Title: "FedEx",  Summary: "[Link] Status"			CarExt: "[Link] Status"
+ *  Service message >1 unread  Ticker: "FedEx: Delivered",     Title: "FedEx",  Summary: "[2]FedEx: Delivered"		CarExt: "[Link] Delivered"
+ *  Group chat with  1 unread  Ticker: "GroupNick: Hello",     Title: "Group",  Summary: "GroupNick: Hello"			CarExt: "GroupNick: Hello"
+ *  Group chat with >1 unread  Ticker: "GroupNick: [Link] Mm", Title: "Group",  Summary: "[2]GroupNick: [Link] Mm"	CarExt: "GroupNick: [Link] Mm"
  *
  * Created by Oasis on 2019-4-19.
  */
@@ -30,9 +29,9 @@ class WeChatMessage {
 	static final String SENDER_MESSAGE_SEPARATOR = ": ";
 	private static final String SELF = "";
 
-	static Message[] buildFromCarConversation(final Conversation conversation, final Notification.CarExtender.UnreadConversation convs) {
-		final String[] car_messages = convs.getMessages();
-		if (car_messages.length == 0) return new Message[] { buildFromBasicFields(conversation).toMessage() };	// No messages in car conversation
+	static Message[] buildMessages(final Conversation conversation) {
+		final String[] car_messages = conversation.ext.getMessages();
+		if (car_messages == null) return new Message[] { buildFromBasicFields(conversation).toMessage() };	// No messages in car conversation
 
 		final WeChatMessage basic_msg = buildFromBasicFields(conversation);
 		final Message[] messages = new Message[car_messages.length];
@@ -106,6 +105,16 @@ class WeChatMessage {
 	}
 
 	static int guessConversationType(final Conversation conversation) {
+		final String[] messages = conversation.ext.getMessages();
+		if (messages != null && messages.length > 1) {  // Car extender messages with multiple senders are strong evidence for group chat.
+			String sender = null;
+			for (final String message : messages) {
+				final String[] splits = message.split(":", 2);
+				if (splits.length < 2) continue;
+				if (sender == null) sender = splits[0];
+				else if (! sender.equals(splits[0])) return Conversation.TYPE_GROUP_CHAT;   // More than one sender
+			}
+		}
 		final CharSequence content = conversation.summary;
 		if (content == null) return Conversation.TYPE_UNKNOWN;
 		final String ticker = conversation.ticker.toString().trim();	// Ticker text (may contain trailing spaces) always starts with sender (same as title for direct message, but not for group chat).
