@@ -22,6 +22,8 @@
     <string name="self_display_name">你</string>
     <string name="action_reply">回复</string>
     <string name="action_preview_image">预览图片</string>
+    <string name="header_group_chat">群聊</string>
+    <string name="header_bot_message">微信号</string>
 
     <string name="channel_message">新消息通知</string>
     <string name="channel_group_message">新群组消息通知</string>

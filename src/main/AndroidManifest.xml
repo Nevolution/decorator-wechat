@@ -33,6 +33,7 @@
             </intent-filter>
             <meta-data android:name="packages" android:value="com.tencent.mm" />
             <meta-data android:name="hint_include_sticky" android:value="true" />
+            <meta-data android:name="hint_include_group_summary" android:value="true" />
             <meta-data android:name="settings.activity" android:value="WeChatDecoratorSettingsActivity" />
         </service>
 

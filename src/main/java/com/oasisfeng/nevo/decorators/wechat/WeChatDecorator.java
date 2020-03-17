@@ -56,8 +56,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static android.app.Notification.EXTRA_SUB_TEXT;
 import static android.app.Notification.EXTRA_TEXT;
 import static android.app.Notification.EXTRA_TITLE;
+import static android.app.Notification.FLAG_GROUP_SUMMARY;
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.N;
 import static android.os.Build.VERSION_CODES.O;
@@ -81,7 +83,10 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private static final String CHANNEL_DND = "message_dnd_mode_channel_id";	// Channel ID used by WeChat for its own DND mode
 	private static final String CHANNEL_VOIP = "voip_notify_channel_new_id";	// Channel ID used by WeChat for VoIP notification
 	private static final String CHANNEL_GROUP_CONVERSATION = "group";			// WeChat has no separate group for group conversation
-	private static final String GROUP_MISC = "misc";
+	private static final String GROUP_GROUP = "nevo.group.wechat.group";
+	private static final String GROUP_BOT = "nevo.group.wechat.bot";
+	private static final String GROUP_DIRECT = "nevo.group.wechat";
+	private static final String GROUP_MISC = "misc";    // Not auto-grouped
 
 	private static final @ColorInt int PRIMARY_COLOR = 0xFF33B332;
 	private static final @ColorInt int LIGHT_COLOR = 0xFF00FF00;
@@ -90,6 +95,14 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	@Override public boolean apply(final MutableStatusBarNotification evolving) {
 		final MutableNotification n = evolving.getNotification();
+		if ((n.flags & FLAG_GROUP_SUMMARY) != 0) {
+			if (GROUP_GROUP.equals(n.getGroup())) {
+				n.extras.putCharSequence(EXTRA_SUB_TEXT, getText(R.string.header_group_chat));
+			} else if (GROUP_BOT.equals(n.getGroup())) {
+				n.extras.putCharSequence(EXTRA_SUB_TEXT, getText(R.string.header_bot_message));
+			} else return false;
+			return true;
+		}
 		final Bundle extras = n.extras;
 		CharSequence title = extras.getCharSequence(EXTRA_TITLE);
 		if (title == null || title.length() == 0) {
@@ -147,7 +160,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (messages.isEmpty()) return true;
 
 		final boolean is_group_chat = conversation.isGroupChat();
-
+		n.setGroup(is_group_chat ? GROUP_GROUP : BuildConfig.DEBUG && conversation.isBotMessage() ? GROUP_BOT : GROUP_DIRECT);  // TODO: Test detection accuracy for bot messages
 		if (SDK_INT >= O) {
 			if (is_group_chat && mUseExtraChannels && ! CHANNEL_DND.equals(channel_id))
 				n.setChannelId(CHANNEL_GROUP_CONVERSATION);

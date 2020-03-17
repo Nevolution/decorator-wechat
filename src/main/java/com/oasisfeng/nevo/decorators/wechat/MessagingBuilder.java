@@ -153,6 +153,7 @@ class MessagingBuilder {
 				final int previous_type = conversation.setType(type);
 				if (BuildConfig.DEBUG && type != previous_type
 						&& (previous_type != Conversation.TYPE_UNKNOWN || type != Conversation.TYPE_DIRECT_MESSAGE)) {
+					mController.recastNotification(n_key, null);    // Recast to modify the group
 					if (SDK_INT >= O) showDebugNotification(conversation, "Type " + type + " << " + previous_type);
 				}
 			};
