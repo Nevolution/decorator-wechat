@@ -63,6 +63,7 @@ import static android.app.Notification.FLAG_GROUP_SUMMARY;
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.N;
 import static android.os.Build.VERSION_CODES.O;
+import static android.os.Build.VERSION_CODES.P;
 import static android.service.notification.NotificationListenerService.REASON_APP_CANCEL;
 import static android.service.notification.NotificationListenerService.REASON_CANCEL;
 import static android.service.notification.NotificationListenerService.REASON_CHANNEL_BANNED;
@@ -87,6 +88,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private static final String GROUP_BOT = "nevo.group.wechat.bot";
 	private static final String GROUP_DIRECT = "nevo.group.wechat";
 	private static final String GROUP_MISC = "misc";    // Not auto-grouped
+	@SuppressWarnings("SpellCheckingInspection")
+	private static final String KEY_SERVICE_MESSAGE = "notifymessage";			// Virtual WeChat account for service notification messages
 
 	private static final @ColorInt int PRIMARY_COLOR = 0xFF33B332;
 	private static final @ColorInt int LIGHT_COLOR = 0xFF00FF00;
@@ -160,7 +163,10 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (messages.isEmpty()) return true;
 
 		final boolean is_group_chat = conversation.isGroupChat();
-		n.setGroup(is_group_chat ? GROUP_GROUP : BuildConfig.DEBUG && conversation.isBotMessage() ? GROUP_BOT : GROUP_DIRECT);  // TODO: Test detection accuracy for bot messages
+		if (SDK_INT >= P && KEY_SERVICE_MESSAGE.equals(conversation.key)) {     // Setting conversation title before Android P will make it a group chat.
+			messaging.setConversationTitle(getString(R.string.header_service_message)); // A special header for this non-group conversation with multiple senders
+			n.setGroup(GROUP_BOT);
+		} else n.setGroup(is_group_chat ? GROUP_GROUP : BuildConfig.DEBUG && conversation.isBotMessage() ? GROUP_BOT : GROUP_DIRECT);  // TODO: Test detection accuracy for bot messages
 		if (SDK_INT >= O) {
 			if (is_group_chat && mUseExtraChannels && ! CHANNEL_DND.equals(channel_id))
 				n.setChannelId(CHANNEL_GROUP_CONVERSATION);
