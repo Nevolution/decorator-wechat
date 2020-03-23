@@ -25,6 +25,7 @@
     <string name="header_group_chat">群聊</string>
     <string name="header_bot_message">微信号</string>
     <string name="header_service_message">服务消息</string>
+    <string name="wechat_with_no_reply_receiver">回复失败（微信缺少处理回复的组件，可能已禁用）</string>
 
     <string name="channel_message">新消息通知</string>
     <string name="channel_group_message">新群组消息通知</string>

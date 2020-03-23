@@ -16,6 +16,7 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Process;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Profile;
 import android.service.notification.StatusBarNotification;
@@ -297,16 +298,18 @@ class MessagingBuilder {
 			reply_action.send(mContext, 0, input_data, (pendingIntent, intent, _result_code, _result_data, _result_extras) -> {
 				if (BuildConfig.DEBUG) Log.d(TAG, "Reply sent: " + intent.toUri(0));
 				if (SDK_INT >= N) {
-					final Bundle addition = new Bundle();
-					final CharSequence[] inputs;
-					if (input_history != null) {
+					final Bundle addition = new Bundle(); final CharSequence[] inputs;
+					final boolean to_current_user = Process.myUserHandle().equals(pendingIntent.getCreatorUserHandle());
+					if (to_current_user && context.getPackageManager().queryBroadcastReceivers(intent, 0).isEmpty()) {
+						inputs = new CharSequence[] { context.getString(R.string.wechat_with_no_reply_receiver) };
+					} else if (input_history != null) {
 						input_history.add(0, text);
 						inputs = input_history.toArray(new CharSequence[0]);
 					} else inputs = new CharSequence[] { text };
 					addition.putCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY, inputs);
 					mController.recastNotification(original_key != null ? original_key : key, addition);
-					markRead(key);
 				}
+				markRead(key);
 			}, null);
 		} catch (final PendingIntent.CanceledException e) {
 			Log.w(TAG, "Reply action is already cancelled: " + key);
