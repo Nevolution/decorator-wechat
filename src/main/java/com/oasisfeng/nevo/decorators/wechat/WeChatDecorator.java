@@ -155,7 +155,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (conversation.isTypeUnknown())
 			conversation.setType(WeChatMessage.guessConversationType(conversation));    // mMessagingBuilder replies on the type
 
-		MessagingStyle messaging = mMessagingBuilder.buildFromExtender(conversation, evolving);
+		MessagingStyle messaging = mMessagingBuilder.buildFromConversation(conversation, evolving);
 		if (messaging == null)	// EXTRA_TEXT will be written in buildFromArchive()
 			messaging = mMessagingBuilder.buildFromArchive(conversation, n, title, getArchivedNotifications(evolving.getOriginalKey(), MAX_NUM_ARCHIVED));
 		if (messaging == null) return true;

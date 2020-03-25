@@ -137,7 +137,7 @@ class MessagingBuilder {
 		return messaging;
 	}
 
-	@Nullable MessagingStyle buildFromExtender(final Conversation conversation, final MutableStatusBarNotification sbn) {
+	@Nullable MessagingStyle buildFromConversation(final Conversation conversation, final MutableStatusBarNotification sbn) {
 		final CarExtender.UnreadConversation ext = conversation.ext;
 		if (ext == null) return null;
 		final MutableNotification n = sbn.getNotification();
@@ -200,14 +200,15 @@ class MessagingBuilder {
 		return messaging;
 	}
 
-	@RequiresApi(O) private void showDebugNotification(final Conversation conversation, final @Nullable String summary) {
-		final StringBuilder bigText = new StringBuilder().append(conversation.summary).append("\nT:").append(conversation.ticker);
-		final String[] messages = conversation.ext.getMessages();
+	@RequiresApi(O) private void showDebugNotification(final Conversation convs, final @Nullable String summary) {
+		final StringBuilder bigText = new StringBuilder().append(convs.summary).append("\nT:").append(convs.ticker);
+		final String[] messages = convs.ext != null ? convs.ext.getMessages() : null;
 		if (messages != null) for (final String msg : messages) bigText.append("\n").append(msg);
 		final Builder n = new Builder(mContext, "Debug").setSmallIcon(android.R.drawable.stat_sys_warning)
-				.setContentTitle(conversation.key).setContentText(conversation.ticker).setSubText(summary).setShowWhen(true)
-				.setStyle(new BigTextStyle().setBigContentTitle(conversation.title).bigText(bigText.toString()));
-		requireNonNull(mContext.getSystemService(NotificationManager.class)).notify(conversation.key.hashCode(), n.build());
+				.setContentTitle(convs.key).setContentText(convs.ticker).setSubText(summary).setShowWhen(true)
+				.setStyle(new BigTextStyle().setBigContentTitle(convs.title).bigText(bigText.toString()));
+		requireNonNull(mContext.getSystemService(NotificationManager.class))
+				.notify(convs.key != null ? convs.key.hashCode() : convs.title.hashCode(), n.build());
 	}
 
 	private static Message buildMessage(final Conversation conversation, final long when, final @Nullable CharSequence ticker,
@@ -270,17 +271,17 @@ class MessagingBuilder {
 		return PendingIntent.getBroadcast(mContext, 0, proxy.setPackage(mContext.getPackageName()), FLAG_UPDATE_CURRENT);
 	}
 
-	private final BroadcastReceiver mReplyReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context context, final Intent proxy_intent) {
-		final PendingIntent reply_action = proxy_intent.getParcelableExtra(EXTRA_REPLY_ACTION);
-		final String result_key = proxy_intent.getStringExtra(EXTRA_RESULT_KEY), reply_prefix = proxy_intent.getStringExtra(EXTRA_REPLY_PREFIX);
-		final Uri data = proxy_intent.getData(); final Bundle results = RemoteInput.getResultsFromIntent(proxy_intent);
+	private final BroadcastReceiver mReplyReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context context, final Intent proxy) {
+		final PendingIntent reply_action = proxy.getParcelableExtra(EXTRA_REPLY_ACTION);
+		final String result_key = proxy.getStringExtra(EXTRA_RESULT_KEY), reply_prefix = proxy.getStringExtra(EXTRA_REPLY_PREFIX);
+		final Uri data = proxy.getData(); final Bundle results = RemoteInput.getResultsFromIntent(proxy);
 		final CharSequence input = results != null ? results.getCharSequence(result_key) : null;
 		if (data == null || reply_action == null || result_key == null || input == null) return;	// Should never happen
 
-		final String key = data.getSchemeSpecificPart(), original_key = proxy_intent.getStringExtra(EXTRA_ORIGINAL_KEY);
+		final String key = data.getSchemeSpecificPart(), original_key = proxy.getStringExtra(EXTRA_ORIGINAL_KEY);
 		if (BuildConfig.DEBUG && SDK_INT >= O && "debug".equals(input.toString())) {
-			final Conversation conversation = mController.getConversation(proxy_intent.getIntExtra(EXTRA_CONVERSATION_ID, 0));
-			if (conversation != null) showDebugNotification(conversation, null);
+			final Conversation conversation = mController.getConversation(proxy.getIntExtra(EXTRA_CONVERSATION_ID, 0));
+			if (conversation != null) showDebugNotification(conversation, "Type: " + conversation.typeToString());
 			mController.recastNotification(original_key != null ? original_key : key, null);
 			return;
 		}
@@ -288,12 +289,12 @@ class MessagingBuilder {
 		if (reply_prefix != null) {
 			text = reply_prefix + input;
 			results.putCharSequence(result_key, text);
-			RemoteInput.addResultsToIntent(new RemoteInput[]{ new RemoteInput.Builder(result_key).build() }, proxy_intent, results);
+			RemoteInput.addResultsToIntent(new RemoteInput[]{ new RemoteInput.Builder(result_key).build() }, proxy, results);
 		} else text = input;
-		final ArrayList<CharSequence> input_history = SDK_INT >= N ? proxy_intent.getCharSequenceArrayListExtra(EXTRA_REMOTE_INPUT_HISTORY) : null;
+		final ArrayList<CharSequence> history = SDK_INT >= N ? proxy.getCharSequenceArrayListExtra(EXTRA_REMOTE_INPUT_HISTORY) : null;
 		try {
 			final Intent input_data = addTargetPackageAndWakeUp(reply_action);
-			input_data.setClipData(proxy_intent.getClipData());
+			input_data.setClipData(proxy.getClipData());
 
 			reply_action.send(mContext, 0, input_data, (pendingIntent, intent, _result_code, _result_data, _result_extras) -> {
 				if (BuildConfig.DEBUG) Log.d(TAG, "Reply sent: " + intent.toUri(0));
@@ -302,9 +303,9 @@ class MessagingBuilder {
 					final boolean to_current_user = Process.myUserHandle().equals(pendingIntent.getCreatorUserHandle());
 					if (to_current_user && context.getPackageManager().queryBroadcastReceivers(intent, 0).isEmpty()) {
 						inputs = new CharSequence[] { context.getString(R.string.wechat_with_no_reply_receiver) };
-					} else if (input_history != null) {
-						input_history.add(0, text);
-						inputs = input_history.toArray(new CharSequence[0]);
+					} else if (history != null) {
+						history.add(0, text);
+						inputs = history.toArray(new CharSequence[0]);
 					} else inputs = new CharSequence[] { text };
 					addition.putCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY, inputs);
 					mController.recastNotification(original_key != null ? original_key : key, addition);

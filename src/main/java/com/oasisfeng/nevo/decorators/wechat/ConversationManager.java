@@ -31,6 +31,7 @@ class ConversationManager {
 		static final int TYPE_DIRECT_MESSAGE = 1;
 		static final int TYPE_GROUP_CHAT = 2;
 		static final int TYPE_BOT_MESSAGE = 3;
+
 		@IntDef({ TYPE_UNKNOWN, TYPE_DIRECT_MESSAGE, TYPE_GROUP_CHAT, TYPE_BOT_MESSAGE }) @Retention(RetentionPolicy.SOURCE) @interface ConversationType {}
 
 		private static final String SCHEME_ORIGINAL_NAME = "ON:";
@@ -44,7 +45,7 @@ class ConversationManager {
 		long timestamp;
 		IconCompat icon;
 		private @Nullable Person.Builder sender;
-		Notification.CarExtender.UnreadConversation ext;    // Of the latest notification
+		@Nullable Notification.CarExtender.UnreadConversation ext;    // Of the latest notification
 
 		/** @return previous type */
 		int setType(final int type) {
@@ -75,6 +76,7 @@ class ConversationManager {
 		boolean isGroupChat() { return mType == TYPE_GROUP_CHAT; }
 		boolean isBotMessage() { return mType == TYPE_BOT_MESSAGE; }
 		boolean isTypeUnknown() { return mType == TYPE_UNKNOWN; }
+		String typeToString() { return Integer.toString(mType); }
 
 		boolean isChat() { return ticker != null && TextUtils.indexOf(ticker, ':') > 0; }
 

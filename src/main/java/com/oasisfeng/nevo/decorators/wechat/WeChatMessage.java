@@ -1,5 +1,6 @@
 package com.oasisfeng.nevo.decorators.wechat;
 
+import android.app.Notification;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat.MessagingStyle.Message;
 import android.support.v4.app.Person;
@@ -30,8 +31,9 @@ class WeChatMessage {
 	private static final String SELF = "";
 
 	static Message[] buildMessages(final Conversation conversation) {
-		final String[] car_messages = conversation.ext.getMessages();
-		if (car_messages == null) return new Message[] { buildFromBasicFields(conversation).toMessage() };	// No messages in car conversation
+		final Notification.CarExtender.UnreadConversation ext = conversation.ext; final String[] car_messages;
+		if (ext == null || (car_messages = ext.getMessages()) == null || car_messages.length == 0)       // Sometimes extender messages are empty, for unknown cause.
+			return new Message[] { buildFromBasicFields(conversation).toMessage() };	// No messages in car conversation
 
 		final WeChatMessage basic_msg = buildFromBasicFields(conversation);
 		final Message[] messages = new Message[car_messages.length];
@@ -119,7 +121,7 @@ class WeChatMessage {
 		if (content == null) return Conversation.TYPE_UNKNOWN;
 		final String ticker = conversation.ticker.toString().trim();	// Ticker text (may contain trailing spaces) always starts with sender (same as title for direct message, but not for group chat).
 		// Content text includes sender for group and service messages, but not for direct messages.
-		final int pos = TextUtils.indexOf(content, ticker.substring(0, Math.min(10, ticker.length())));    // Seek for the first 10 chars of ticker in content.
+		final int pos = TextUtils.indexOf(content, ticker);             // Seek for the ticker text in content.
 		if (pos >= 0 && pos <= 6) {        // Max length (up to 999 unread): [999t]
 			// The content without unread count prefix, may or may not start with sender nick
 			final CharSequence message = pos > 0 && content.charAt(0) == '[' ? content.subSequence(pos, content.length()) : content;
