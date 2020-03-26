@@ -31,17 +31,23 @@ class WeChatMessage {
 	private static final String SELF = "";
 
 	static Message[] buildMessages(final Conversation conversation) {
-		final Notification.CarExtender.UnreadConversation ext = conversation.ext; final String[] car_messages;
-		if (ext == null || (car_messages = ext.getMessages()) == null || car_messages.length == 0)       // Sometimes extender messages are empty, for unknown cause.
-			return new Message[] { buildFromBasicFields(conversation).toMessage() };	// No messages in car conversation
+		final CarExtender.UnreadConversation ext = conversation.ext; final String[] ext_messages; final int num_ext_messages;
+		if (ext == null || (ext_messages = ext.getMessages()) == null || (num_ext_messages = ext_messages.length) == 0)
+			return new Message[] { buildFromBasicFields(conversation).toMessage() };	// Sometimes extender messages are empty, for unknown cause.
 
 		final WeChatMessage basic_msg = buildFromBasicFields(conversation);
-		final Message[] messages = new Message[car_messages.length];
-		int end_of_peers = -1;
-		if (! conversation.isGroupChat()) for (end_of_peers = car_messages.length - 1; end_of_peers >= -1; end_of_peers --)
-			if (end_of_peers >= 0 && TextUtils.equals(basic_msg.text, car_messages[end_of_peers])) break;	// Find the actual end line which matches basic fields, in case extra lines are sent by self
-		for (int i = 0, count = car_messages.length; i < count; i ++)
-			messages[i] = buildFromCarMessage(conversation, car_messages[i], end_of_peers >= 0 && i > end_of_peers).toMessage();
+		int end_of_received = -1;
+		if (! conversation.isGroupChat() && ! conversation.isBotMessage()) {
+			if (num_ext_messages == 1 && ! TextUtils.equals(basic_msg.text, ext_messages[num_ext_messages - 1]))
+				return new Message[] {		// Rare case: the only extender message is a reply, sent after the message represented by content and ticker.
+						buildFromCarMessage(conversation, basic_msg.text.toString(), false).toMessage(),
+						buildFromCarMessage(conversation, ext_messages[0], true).toMessage() };
+			for (end_of_received = num_ext_messages - 1; end_of_received >= 0; end_of_received --)
+				if (TextUtils.equals(basic_msg.text, ext_messages[end_of_received])) break;    // Find the actual end line which matches basic fields, in case extra lines are sent by self
+		}
+		final Message[] messages = new Message[num_ext_messages];
+		for (int i = 0; i < num_ext_messages; i ++)
+			messages[i] = buildFromCarMessage(conversation, ext_messages[i], end_of_received >= 0 && i > end_of_received).toMessage();
 		return messages;
 	}
 
