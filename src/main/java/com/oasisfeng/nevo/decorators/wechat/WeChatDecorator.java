@@ -89,7 +89,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private static final String GROUP_DIRECT = "nevo.group.wechat";
 	private static final String GROUP_MISC = "misc";    // Not auto-grouped
 	@SuppressWarnings("SpellCheckingInspection")
-	private static final String KEY_SERVICE_MESSAGE = "notifymessage";			// Virtual WeChat account for service notification messages
+	static final String KEY_SERVICE_MESSAGE = "notifymessage";					// Virtual WeChat account for service notification messages
 
 	private static final @ColorInt int PRIMARY_COLOR = 0xFF33B332;
 	private static final @ColorInt int LIGHT_COLOR = 0xFF00FF00;

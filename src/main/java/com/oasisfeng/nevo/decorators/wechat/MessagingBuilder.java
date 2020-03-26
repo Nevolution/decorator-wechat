@@ -53,6 +53,10 @@ import static android.support.v4.app.NotificationCompat.EXTRA_CONVERSATION_TITLE
 import static android.support.v4.app.NotificationCompat.EXTRA_IS_GROUP_CONVERSATION;
 import static android.support.v4.app.NotificationCompat.EXTRA_MESSAGES;
 import static android.support.v4.app.NotificationCompat.EXTRA_SELF_DISPLAY_NAME;
+import static com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation.TYPE_BOT_MESSAGE;
+import static com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation.TYPE_DIRECT_MESSAGE;
+import static com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation.TYPE_GROUP_CHAT;
+import static com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation.TYPE_UNKNOWN;
 import static com.oasisfeng.nevo.decorators.wechat.WeChatMessage.SENDER_MESSAGE_SEPARATOR;
 import static java.util.Objects.requireNonNull;
 
@@ -149,13 +153,14 @@ class MessagingBuilder {
 			final PendingIntent.OnFinished callback = (p, intent, r, d, b) -> {
 				final String key = conversation.key = intent.getStringExtra(KEY_USERNAME);    // setType() below will trigger rebuilding of conversation sender.
 				if (key == null) return;
-				final int type = key.endsWith("@chatroom") || key.endsWith("@im.chatroom"/* WeWork */) ? Conversation.TYPE_GROUP_CHAT
-						: key.startsWith("gh_") ? Conversation.TYPE_BOT_MESSAGE : Conversation.TYPE_DIRECT_MESSAGE; // TODO: "...@openim" for WeWork direct message
-				final int previous_type = conversation.setType(type);
-				if (BuildConfig.DEBUG && type != previous_type
-						&& (previous_type != Conversation.TYPE_UNKNOWN || type != Conversation.TYPE_DIRECT_MESSAGE)) {
-					mController.recastNotification(n_key, null);    // Recast to modify the group
-					if (SDK_INT >= O) showDebugNotification(conversation, "Type " + type + " << " + previous_type);
+				final int type = key.endsWith("@chatroom") || key.endsWith("@im.chatroom"/* WeWork */) ? TYPE_GROUP_CHAT
+						: key.startsWith("gh_") || key.equals(WeChatDecorator.KEY_SERVICE_MESSAGE) ? TYPE_BOT_MESSAGE
+						: key.endsWith("@openim") ? TYPE_DIRECT_MESSAGE : TYPE_UNKNOWN;
+				final int previous_type;
+				if (type != TYPE_UNKNOWN && (previous_type = conversation.setType(type)) != type) {
+					if (previous_type != TYPE_UNKNOWN || type != TYPE_DIRECT_MESSAGE)
+						mController.recastNotification(n_key, null);    // Recast to modify the group, except for "unknown -> direct".
+					if (BuildConfig.DEBUG) showDebugNotification(conversation, "Type " + type + " << " + previous_type);
 				}
 			};
 			on_reply.send(mContext, 0, new Intent(""/* noop */), callback, null);
@@ -200,13 +205,14 @@ class MessagingBuilder {
 		return messaging;
 	}
 
-	@RequiresApi(O) private void showDebugNotification(final Conversation convs, final @Nullable String summary) {
+	private void showDebugNotification(final Conversation convs, final @Nullable String summary) {
 		final StringBuilder bigText = new StringBuilder().append(convs.summary).append("\nT:").append(convs.ticker);
 		final String[] messages = convs.ext != null ? convs.ext.getMessages() : null;
 		if (messages != null) for (final String msg : messages) bigText.append("\n").append(msg);
-		final Builder n = new Builder(mContext, "Debug").setSmallIcon(android.R.drawable.stat_sys_warning)
+		final Builder n = new Builder(mContext).setSmallIcon(android.R.drawable.stat_sys_warning)
 				.setContentTitle(convs.key).setContentText(convs.ticker).setSubText(summary).setShowWhen(true)
 				.setStyle(new BigTextStyle().setBigContentTitle(convs.title).bigText(bigText.toString()));
+		if (SDK_INT >= O) n.setChannelId("Debug");
 		requireNonNull(mContext.getSystemService(NotificationManager.class))
 				.notify(convs.key != null ? convs.key.hashCode() : convs.title.hashCode(), n.build());
 	}
@@ -279,7 +285,7 @@ class MessagingBuilder {
 		if (data == null || reply_action == null || result_key == null || input == null) return;	// Should never happen
 
 		final String key = data.getSchemeSpecificPart(), original_key = proxy.getStringExtra(EXTRA_ORIGINAL_KEY);
-		if (BuildConfig.DEBUG && SDK_INT >= O && "debug".equals(input.toString())) {
+		if (BuildConfig.DEBUG && "debug".equals(input.toString())) {
 			final Conversation conversation = mController.getConversation(proxy.getIntExtra(EXTRA_CONVERSATION_ID, 0));
 			if (conversation != null) showDebugNotification(conversation, "Type: " + conversation.typeToString());
 			mController.recastNotification(original_key != null ? original_key : key, null);

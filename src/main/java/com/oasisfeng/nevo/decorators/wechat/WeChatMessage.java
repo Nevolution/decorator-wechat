@@ -1,6 +1,6 @@
 package com.oasisfeng.nevo.decorators.wechat;
 
-import android.app.Notification;
+import android.app.Notification.CarExtender;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat.MessagingStyle.Message;
 import android.support.v4.app.Person;
@@ -107,8 +107,11 @@ class WeChatMessage {
 	}
 
 	static int guessConversationType(final Conversation conversation) {
-		final String[] messages = conversation.ext.getMessages();
-		if (messages != null && messages.length > 1) {  // Car extender messages with multiple senders are strong evidence for group chat.
+		final CarExtender.UnreadConversation ext = conversation.ext;
+		final String[] messages = ext != null ? ext.getMessages() : null;
+		final int num_messages = messages != null ? messages.length : 0;
+		final String last_message = num_messages > 0 ? messages[num_messages - 1] : null;
+		if (num_messages > 1) {  // Car extender messages with multiple senders are strong evidence for group chat.
 			String sender = null;
 			for (final String message : messages) {
 				final String[] splits = message.split(":", 2);
@@ -124,14 +127,27 @@ class WeChatMessage {
 		final int pos = TextUtils.indexOf(content, ticker);             // Seek for the ticker text in content.
 		if (pos >= 0 && pos <= 6) {        // Max length (up to 999 unread): [999t]
 			// The content without unread count prefix, may or may not start with sender nick
-			final CharSequence message = pos > 0 && content.charAt(0) == '[' ? content.subSequence(pos, content.length()) : content;
-			// message.startsWith(title + SENDER_MESSAGE_SEPARATOR)
-			if (startsWith(message, conversation.title, SENDER_MESSAGE_SEPARATOR))		// The title of group chat is group name, not the message sender
-				return Conversation.TYPE_DIRECT_MESSAGE;	// Most probably a direct message with more than 1 unread
+			final CharSequence content_wo_count = pos > 0 && content.charAt(0) == '[' ? content.subSequence(pos, content.length()) : content;
+			// content_wo_count.startsWith(title + SENDER_MESSAGE_SEPARATOR)
+			if (startsWith(content_wo_count, conversation.title, SENDER_MESSAGE_SEPARATOR)) {   // The title of group chat is group name, not the message sender
+				final CharSequence text = content_wo_count.subSequence(
+						conversation.title.length() + SENDER_MESSAGE_SEPARATOR.length(), content_wo_count.length());
+				if (startWithBracketedPrefixAndOneSpace(last_message, text))      // Ticker: "Bot name: Text", Content: "[2] Bot name: Text", Message: "[Link] Text"
+					return Conversation.TYPE_BOT_MESSAGE;
+				return Conversation.TYPE_DIRECT_MESSAGE;    // Most probably a direct message with more than 1 unread
+			}
 			return Conversation.TYPE_GROUP_CHAT;
 		} else if (TextUtils.indexOf(ticker, content) >= 0) {
+			if (startWithBracketedPrefixAndOneSpace(last_message, content))      // Ticker: "Bot name: Text", Content: "Text", Message: "[Link] Text"
+				return Conversation.TYPE_BOT_MESSAGE;
 			return Conversation.TYPE_UNKNOWN;				// Indistinguishable (direct message with 1 unread, or a service text message without link)
 		} else return Conversation.TYPE_BOT_MESSAGE;		// Most probably a service message with link
+	}
+
+	private static boolean startWithBracketedPrefixAndOneSpace(final @Nullable String text, final CharSequence needle) {
+		if (text == null) return false;
+		final int start = text.indexOf(needle.toString());
+		return start > 3 && text.charAt(0) == '[' && text.charAt(start - 1) == ' ' && text.charAt(start - 2) == ']';
 	}
 
 	private static boolean startsWith(final CharSequence text, final CharSequence needle1, @SuppressWarnings("SameParameterValue") final String needle2) {
