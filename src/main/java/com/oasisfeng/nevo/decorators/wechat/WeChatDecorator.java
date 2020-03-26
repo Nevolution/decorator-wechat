@@ -166,7 +166,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (SDK_INT >= P && KEY_SERVICE_MESSAGE.equals(conversation.key)) {     // Setting conversation title before Android P will make it a group chat.
 			messaging.setConversationTitle(getString(R.string.header_service_message)); // A special header for this non-group conversation with multiple senders
 			n.setGroup(GROUP_BOT);
-		} else n.setGroup(is_group_chat ? GROUP_GROUP : BuildConfig.DEBUG && conversation.isBotMessage() ? GROUP_BOT : GROUP_DIRECT);  // TODO: Test detection accuracy for bot messages
+		} else n.setGroup(is_group_chat ? GROUP_GROUP : conversation.isBotMessage() ? GROUP_BOT : GROUP_DIRECT);
 		if (SDK_INT >= O) {
 			if (is_group_chat && mUseExtraChannels && ! CHANNEL_DND.equals(channel_id))
 				n.setChannelId(CHANNEL_GROUP_CONVERSATION);
