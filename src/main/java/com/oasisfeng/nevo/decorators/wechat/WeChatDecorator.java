@@ -123,8 +123,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (n.tickerText == null/* Legacy misc. notifications */|| CHANNEL_MISC.equals(channel_id)) {
 			if (SDK_INT >= O && channel_id == null) n.setChannelId(CHANNEL_MISC);
 			n.setGroup(GROUP_MISC);        // Avoid being auto-grouped
-
-			if (SDK_INT >= O && isEnabled(mPrefKeyCallTweak) && mOngoingCallTweaker.apply(this, evolving.getOriginalKey(), n)) return true;
 			Log.d(TAG, "Skip further process for non-conversation notification: " + title);    // E.g. web login confirmation notification.
 			return (n.flags & Notification.FLAG_FOREGROUND_SERVICE) == 0;
 		}
@@ -202,7 +200,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 	@Override protected boolean onNotificationRemoved(final String key, final int reason) {
 		if (reason == REASON_APP_CANCEL) {		// For ongoing notification, or if "Removal-Aware" of Nevolution is activated
 			Log.d(TAG, "Cancel notification: " + key);
-			if (SDK_INT >= O) mOngoingCallTweaker.onNotificationRemoved(key);
 		} else if (SDK_INT >= O && reason == REASON_CHANNEL_BANNED && ! isChannelAvailable(getUser(key))) {
 			Log.w(TAG, "Channel lost, disable extra channels from now on.");
 			mUseExtraChannels = false;
@@ -287,7 +284,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 		mPreferences = context.getSharedPreferences(PREFERENCES_NAME, MODE_MULTI_PROCESS);
 		migrateFromLegacyPreferences();		// TODO: Remove this IO-blocking migration code (created in Aug, 2019).
 		mPrefKeyWear = getString(R.string.pref_wear);
-		mPrefKeyCallTweak = getString(R.string.pref_call_tweak);
 
 		mMessagingBuilder = new MessagingBuilder(this, mPreferences, new MessagingBuilder.Controller() {
 			@Override public void recastNotification(final String key, final Bundle addition) {
@@ -297,7 +293,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 				return mConversationManager.getConversation(id);
 			}
 		});	// Must be called after loadPreferences().
-		if (SDK_INT >= O) mOngoingCallTweaker = new OngoingCallTweaker(this, this::recastNotification);
 		final IntentFilter filter = new IntentFilter(Intent.ACTION_PACKAGE_REMOVED); filter.addDataScheme("package");
 		registerReceiver(mPackageEventReceiver, filter);
 		registerReceiver(mSettingsChangedReceiver, new IntentFilter(ACTION_SETTINGS_CHANGED));
@@ -306,7 +301,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 	@Override public void onDestroy() {
 		unregisterReceiver(mSettingsChangedReceiver);
 		unregisterReceiver(mPackageEventReceiver);
-		if (SDK_INT >= O) mOngoingCallTweaker.close();
 		mMessagingBuilder.close();
 		super.onDestroy();
 	}
@@ -367,12 +361,10 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	private final ConversationManager mConversationManager = new ConversationManager();
 	private MessagingBuilder mMessagingBuilder;
-	private @RequiresApi(O) OngoingCallTweaker mOngoingCallTweaker;
 	private boolean mWeChatTargetingO;
 	private boolean mUseExtraChannels = true;	// Extra channels should not be used in Insider mode, as WeChat always removes channels not maintained by itself.
 	private SharedPreferences mPreferences;
 	private String mPrefKeyWear;
-	private String mPrefKeyCallTweak;
 	private final Handler mHandler = new Handler();
 
 	static final String TAG = "Nevo.Decorator[WeChat]";

@@ -12,7 +12,6 @@
     <string name="pref_activate" translatable="false">activate</string>
     <string name="pref_extension" translatable="false">extension</string>
     <string name="pref_agent" translatable="false">agent</string>
-    <string name="pref_call_tweak" translatable="false">call</string>
     <string name="pref_mention_action" translatable="false">mention</string>
     <string name="pref_wear" translatable="false">wear</string>
     <string name="pref_hide" translatable="false">hide</string>

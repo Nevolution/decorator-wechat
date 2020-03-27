@@ -23,12 +23,6 @@
         android:summary="@string/pref_mention_action_summary" />
 
     <SwitchPreference
-        android:key="@string/pref_call_tweak"
-        android:title="@string/pref_call_tweak_title"
-        android:defaultValue="false"
-        android:summary="@string/pref_call_tweak_summary" />
-
-    <SwitchPreference
         android:key="@string/pref_wear"
         android:title="@string/pref_wear_title"
         android:defaultValue="false"

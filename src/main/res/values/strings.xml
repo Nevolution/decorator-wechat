@@ -53,8 +53,6 @@
     <string name="action_disable_agent_launcher_entrance">隐藏替身的启动入口</string>
     <string name="pref_mention_action_title">添加 @提及 式快捷回复</string>
     <string name="pref_mention_action_summary">额外的快捷回复操作，提及群聊中的最后发言者。\n注意，受接口限制，这 *不会* 像在聊天界面中的提及动作那样触发对方的提醒。</string>
-    <string name="pref_call_tweak_title">优化通话通知</string>
-    <string name="pref_call_tweak_summary">优化通话进行中的通知体验，增加醒目的背景色，实时显示通话时长。</string>
     <string name="pref_wear_title">Wear OS (实验性)</string>
     <string name="pref_wear_summary">同步通知至 Wear OS 设备。（如果设备上安装有微信 Wear 版，请勿开启）</string>
     <string name="pref_hide_title">隐藏启动图标</string>
