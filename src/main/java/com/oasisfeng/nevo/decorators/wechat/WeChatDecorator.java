@@ -285,7 +285,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		migrateFromLegacyPreferences();		// TODO: Remove this IO-blocking migration code (created in Aug, 2019).
 		mPrefKeyWear = getString(R.string.pref_wear);
 
-		mMessagingBuilder = new MessagingBuilder(this, mPreferences, new MessagingBuilder.Controller() {
+		mMessagingBuilder = new MessagingBuilder(this, new MessagingBuilder.Controller() {
 			@Override public void recastNotification(final String key, final Bundle addition) {
 				WeChatDecorator.this.recastNotification(key, addition);
 			}

@@ -17,12 +17,6 @@
         tools:summary="@string/pref_agent_summary_update" />
 
     <SwitchPreference
-        android:key="@string/pref_mention_action"
-        android:title="@string/pref_mention_action_title"
-        android:defaultValue="false"
-        android:summary="@string/pref_mention_action_summary" />
-
-    <SwitchPreference
         android:key="@string/pref_wear"
         android:title="@string/pref_wear_title"
         android:defaultValue="false"

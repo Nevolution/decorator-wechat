@@ -13,7 +13,6 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Process;
@@ -187,17 +186,6 @@ class MessagingBuilder {
 					.addRemoteInput(reply_remote_input.build()).setAllowGeneratedReplies(true);
 			if (SDK_INT >= P) reply_action.setSemanticAction(Action.SEMANTIC_ACTION_REPLY);
 			n.addAction(reply_action.build());
-
-			if (conversation.isGroupChat() && mPreferences.getBoolean(mPrefKeyMentionAction, false)) {
-				final Person last_sender = messages[messages.length - 1].getPerson();
-				if (last_sender != null && last_sender != mUserSelf) {
-					final String label = "@" + last_sender.getName();
-					final String prefix = "@" + Conversation.getOriginalName(last_sender) + MENTION_SEPARATOR;
-					final PendingIntent intent = proxyDirectReply(conversation.id, sbn, on_reply, remote_input, input_history, prefix);
-					n.addAction(new Action.Builder(null, label, intent).setAllowGeneratedReplies(true)
-							.addRemoteInput(reply_remote_input.setLabel(label).build()).build());
-				}
-			}
 		}
 
 		final MessagingStyle messaging = new MessagingStyle(mUserSelf);
@@ -385,13 +373,11 @@ class MessagingBuilder {
 		Conversation getConversation(int title_hash);
 	}
 
-	MessagingBuilder(final Context context, final SharedPreferences preferences, final Controller controller) {
+	MessagingBuilder(final Context context, final Controller controller) {
 		mContext = context;
-		mPreferences = preferences;
 		mController = controller;
 		mUserSelf = buildPersonFromProfile(context);
 
-		mPrefKeyMentionAction = context.getString(R.string.pref_mention_action);
 		final IntentFilter filter = new IntentFilter(ACTION_REPLY); filter.addAction(ACTION_MENTION); filter.addDataScheme(SCHEME_KEY);
 		context.registerReceiver(mReplyReceiver, filter);
 	}
@@ -406,10 +392,8 @@ class MessagingBuilder {
 	}
 
 	private final Context mContext;
-	private final SharedPreferences mPreferences;
 	private final Controller mController;
 	private final Person mUserSelf;
-	private final String mPrefKeyMentionAction;
 	private final Map<String/* evolved key */, PendingIntent> mMarkReadPendingIntents = new ArrayMap<>();
 	private static final String TAG = WeChatDecorator.TAG;
 }
