@@ -26,7 +26,6 @@
         <service android:name=".WeChatDecorator"
                  android:directBootAware="true" tools:targetApi="N"
                  android:permission="com.oasisfeng.nevo.permission.BIND_DECORATOR_SERVICE"
-                 android:process="com.oasisfeng.nevo.decorators"
                  android:label="@string/decorator_wechat_title"
                  android:description="@string/decorator_wechat_description">
             <intent-filter android:priority="5">
