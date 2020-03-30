@@ -20,7 +20,8 @@
 
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
-    <application android:label="@string/decorator_wechat_label" android:allowBackup="true" tools:ignore="GoogleAppIndexingWarning">
+    <!-- Backup is intentionally disabled to avoid service interruption during backup. -->
+    <application android:label="@string/decorator_wechat_label" android:allowBackup="false" tools:ignore="GoogleAppIndexingWarning">
 
         <service android:name=".WeChatDecorator"
                  android:directBootAware="true" tools:targetApi="N"
