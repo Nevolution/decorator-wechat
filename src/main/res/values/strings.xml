@@ -51,6 +51,10 @@
     <string name="pref_agent_summary_installed">启用此功能后，启动器中会多出一个与微信相同图标的启动入口，它是一个微信启动图标的“替身”，通知圆点（需启动器支持）和“扫码”快捷方式（Android 7.1+）将显示在其上。\n点击可切换此替身的显示名或禁用。</string>
     <string name="pref_agent_summary_update">有更新版本，请点击这里开始升级。🆕</string>
     <string name="action_disable_agent_launcher_entrance">隐藏替身的启动入口</string>
+    <string name="pref_alert_dedup_title">解决双重提示问题</string>
+    <string name="pref_alert_dedup_summary">消除双重提示音、震动及横幅快速闪替。</string>
+    <string name="pref_alert_dedup_guide">如果遇到通知横幅的闪替问题，请关闭微信本身通知设置中“新消息通知”的横幅选项（或调降重要性）。\n\n如果遇到双重提示音或震动，请关闭微信本身通知设置中“新消息通知”的提示音或震动。\n\n请避免修改除“新消息通知”之外的其它通知类别。</string>
+    <string name="pref_alert_dedup_action">打开微信本身的通知设置</string>
     <string name="pref_wear_title">Wear OS (实验性)</string>
     <string name="pref_wear_summary">同步通知至 Wear OS 设备。（如果设备上安装有微信 Wear 版，请勿开启）</string>
     <string name="pref_hide_title">隐藏启动图标</string>
