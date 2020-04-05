@@ -140,6 +140,7 @@ class WeChatMessage {
 						conversation.title.length() + SENDER_MESSAGE_SEPARATOR.length(), content_wo_count.length());
 				if (startWithBracketedPrefixAndOneSpace(last_message, text))      // Ticker: "Bot name: Text", Content: "[2] Bot name: Text", Message: "[Link] Text"
 					return Conversation.TYPE_BOT_MESSAGE;
+				else if (isBracketedPrefixOnly(last_message)) return Conversation.TYPE_BOT_MESSAGE;
 				return Conversation.TYPE_DIRECT_MESSAGE;    // Most probably a direct message with more than 1 unread
 			}
 			return Conversation.TYPE_GROUP_CHAT;
@@ -154,6 +155,12 @@ class WeChatMessage {
 		if (text == null) return false;
 		final int start = text.indexOf(needle.toString());
 		return start > 3 && text.charAt(0) == '[' && text.charAt(start - 1) == ' ' && text.charAt(start - 2) == ']';
+	}
+
+	private static boolean isBracketedPrefixOnly(final @Nullable String text) {
+		if (text == null) return false;
+		final int length = text.length();
+		return length >= 3 && length <= 4 && text.charAt(0) == '[' && text.charAt(length - 1) == ']';
 	}
 
 	private static boolean startsWith(final CharSequence text, final CharSequence needle1, @SuppressWarnings("SameParameterValue") final String needle2) {
