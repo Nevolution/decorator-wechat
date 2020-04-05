@@ -1,5 +1,6 @@
 package com.oasisfeng.nevo.decorators.wechat;
 
+import android.app.Notification;
 import android.app.Notification.CarExtender;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat.MessagingStyle.Message;
@@ -31,23 +32,17 @@ class WeChatMessage {
 	private static final String SELF = "";
 
 	static Message[] buildMessages(final Conversation conversation) {
-		final CarExtender.UnreadConversation ext = conversation.ext; final String[] ext_messages; final int num_ext_messages;
-		if (ext == null || (ext_messages = ext.getMessages()) == null || (num_ext_messages = ext_messages.length) == 0)
-			return new Message[] { buildFromBasicFields(conversation).toMessage() };	// Sometimes extender messages are empty, for unknown cause.
+		final Notification.CarExtender.UnreadConversation ext = conversation.ext; final String[] ext_messages;
+		if (ext == null || (ext_messages = ext.getMessages()) == null || ext_messages.length == 0)       // Sometimes extender messages are empty, for unknown cause.
+			return new Message[] { buildFromBasicFields(conversation).toMessage() };	// No messages in car conversation
 
 		final WeChatMessage basic_msg = buildFromBasicFields(conversation);
-		int end_of_received = -1;
-		if (! conversation.isGroupChat() && ! conversation.isBotMessage()) {
-			if (num_ext_messages == 1 && ! TextUtils.equals(basic_msg.text, ext_messages[num_ext_messages - 1]))
-				return new Message[] {		// Rare case: the only extender message is a reply, sent after the message represented by content and ticker.
-						buildFromCarMessage(conversation, basic_msg.text.toString(), false).toMessage(),
-						buildFromCarMessage(conversation, ext_messages[0], true).toMessage() };
-			for (end_of_received = num_ext_messages - 1; end_of_received >= 0; end_of_received --)
-				if (TextUtils.equals(basic_msg.text, ext_messages[end_of_received])) break;    // Find the actual end line which matches basic fields, in case extra lines are sent by self
-		}
-		final Message[] messages = new Message[num_ext_messages];
-		for (int i = 0; i < num_ext_messages; i ++)
-			messages[i] = buildFromCarMessage(conversation, ext_messages[i], end_of_received >= 0 && i > end_of_received).toMessage();
+		final Message[] messages = new Message[ext_messages.length];
+		int end_of_peers = -1;
+		if (! conversation.isGroupChat()) for (end_of_peers = ext_messages.length - 1; end_of_peers >= -1; end_of_peers --)
+			if (end_of_peers >= 0 && TextUtils.equals(basic_msg.text, ext_messages[end_of_peers])) break;	// Find the actual end line which matches basic fields, in case extra lines are sent by self
+		for (int i = 0, count = ext_messages.length; i < count; i ++)
+			messages[i] = buildFromCarMessage(conversation, ext_messages[i], end_of_peers >= 0 && i > end_of_peers).toMessage();
 		return messages;
 	}
 
