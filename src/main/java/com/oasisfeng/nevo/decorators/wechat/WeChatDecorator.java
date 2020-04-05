@@ -115,7 +115,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final int flags = n.flags; final String channel_id = SDK_INT >= O ? n.getChannelId() : null;
 		if ((flags & Notification.FLAG_ONGOING_EVENT) != 0 && CHANNEL_VOIP.equals(channel_id)) return false;
 
-		if (title != (title = EmojiTranslator.translate(title))) extras.putCharSequence(EXTRA_TITLE, title);
 		n.color = PRIMARY_COLOR;        // Tint the small icon
 		extras.putBoolean(Notification.EXTRA_SHOW_WHEN, true);
 		if (isEnabled(mPrefKeyWear)) n.flags &= ~ Notification.FLAG_LOCAL_ONLY;
