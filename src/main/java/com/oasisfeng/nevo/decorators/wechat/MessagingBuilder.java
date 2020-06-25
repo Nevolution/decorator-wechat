@@ -16,8 +16,6 @@ import android.content.IntentFilter;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Process;
-import android.provider.ContactsContract.Contacts;
-import android.provider.ContactsContract.Profile;
 import android.service.notification.StatusBarNotification;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -25,7 +23,6 @@ import android.support.annotation.RequiresApi;
 import android.support.v4.app.NotificationCompat.MessagingStyle;
 import android.support.v4.app.NotificationCompat.MessagingStyle.Message;
 import android.support.v4.app.Person;
-import android.support.v4.graphics.drawable.IconCompat;
 import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.Log;
@@ -383,8 +380,7 @@ class MessagingBuilder {
 	}
 
 	private static Person buildPersonFromProfile(final Context context) {
-		return new Person.Builder().setName(context.getString(R.string.self_display_name))
-				.setIcon(IconCompat.createWithContentUri(Uri.withAppendedPath(Profile.CONTENT_URI, Contacts.Photo.DISPLAY_PHOTO))).build();
+		return new Person.Builder().setName(context.getString(R.string.self_display_name)).build();
 	}
 
 	void close() {
