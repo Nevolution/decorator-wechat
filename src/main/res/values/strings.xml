@@ -57,10 +57,7 @@
     <string name="pref_alert_dedup_action">打开微信本身的通知设置</string>
     <string name="pref_wear_title">Wear OS (实验性)</string>
     <string name="pref_wear_summary">同步通知至 Wear OS 设备。（如果设备上安装有微信 Wear 版，请勿开启）</string>
-    <string name="pref_hide_title">隐藏启动图标</string>
-    <string name="pref_hide_summary">你还可以通过女娲石设置中的插件设置进入这个界面。</string>
     <string name="pref_open_source_title">开源项目</string>
     <string name="pref_open_source_summary">欢迎来 GitHub 上访问我们</string>
-    <string name="pref_version_title">版本</string>
     <string name="prompt_hide_prerequisite">隐藏启动图标的前提是从女娲石的插件设置入口进入此界面，这也是图标隐藏后进入此界面的路径。</string>
 </resources>

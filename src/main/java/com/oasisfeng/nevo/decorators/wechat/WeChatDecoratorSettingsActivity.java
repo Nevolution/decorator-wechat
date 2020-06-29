@@ -22,7 +22,6 @@ import android.os.UserManager;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceManager;
-import android.preference.TwoStatePreference;
 import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
 import android.support.annotation.StringRes;
@@ -123,23 +122,6 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 			preference_agent.setSummary(agent_version < 0 ? R.string.pref_agent_summary : R.string.pref_agent_summary_update);
 			preference_agent.setOnPreferenceClickListener(pref -> installAssetApk("agent.apk"));
 		}
-
-		final boolean standalone = isStandalone();
-		final TwoStatePreference preference_hide = (TwoStatePreference) findPreference(getString(R.string.pref_hide));
-		if (preference_hide != null) {
-			if (standalone) {
-				final ComponentName component = new ComponentName(this, getClass());
-				final int state = pm.getComponentEnabledSetting(component);
-				preference_hide.setChecked(state == COMPONENT_ENABLED_STATE_DISABLED);
-				preference_hide.setOnPreferenceChangeListener(this::toggleHidingLauncherIcon);
-			} else getPreferenceScreen().removePreference(preference_hide);
-		}
-
-		final Preference pref_ver = findPreference(getString(R.string.pref_version));
-		if (pref_ver != null) {
-			if (! standalone) getPreferenceScreen().removePreference(pref_ver);
-			else try { pref_ver.setSummary(pm.getPackageInfo(getPackageName(), 0).versionName); } catch (final NameNotFoundException ignored) {}
-		}
 	}
 
 	private boolean selectAgentLabel() {
@@ -174,10 +156,6 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		getPackageManager().setComponentEnabledSetting(new ComponentName(this, getClass()),
 				value != Boolean.TRUE ? COMPONENT_ENABLED_STATE_ENABLED : COMPONENT_ENABLED_STATE_DISABLED, DONT_KILL_APP);
 		return true;
-	}
-
-	private boolean isStandalone() {
-		return getPackageName().equals(BuildConfig.APPLICATION_ID);
 	}
 
 	private boolean isDecoratorRunning() {

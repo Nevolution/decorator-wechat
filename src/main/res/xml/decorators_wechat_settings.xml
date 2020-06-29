@@ -40,21 +40,10 @@
         android:defaultValue="false"
         android:summary="@string/pref_wear_summary" />
 
-    <SwitchPreference
-        android:key="@string/pref_hide"
-        android:title="@string/pref_hide_title"
-        android:summary="@string/pref_hide_summary" />
-
     <Preference
         android:title="@string/pref_open_source_title"
         android:summary="@string/pref_open_source_summary">
         <intent android:action="android.intent.action.VIEW" android:data="https://github.com/Nevolution/decorator-wechat" />
     </Preference>
-
-    <Preference
-        android:key="@string/pref_version"
-        android:title="@string/pref_version_title"
-        android:selectable="false"
-        tools:summary="1.0" />
 
 </PreferenceScreen>
