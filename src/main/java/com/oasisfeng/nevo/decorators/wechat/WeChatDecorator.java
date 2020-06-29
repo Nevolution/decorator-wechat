@@ -34,7 +34,6 @@ import android.os.Handler;
 import android.os.Parcel;
 import android.os.Process;
 import android.os.UserHandle;
-import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.support.annotation.ColorInt;
 import android.support.annotation.Nullable;
@@ -52,7 +51,6 @@ import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -281,7 +279,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final Context context = SDK_INT >= N ? createDeviceProtectedStorageContext() : this;
 		//noinspection deprecation
 		mPreferences = context.getSharedPreferences(PREFERENCES_NAME, MODE_MULTI_PROCESS);
-		migrateFromLegacyPreferences();		// TODO: Remove this IO-blocking migration code (created in Aug, 2019).
 		mPrefKeyWear = getString(R.string.pref_wear);
 
 		mMessagingBuilder = new MessagingBuilder(this, new MessagingBuilder.Controller() {
@@ -302,33 +299,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 		unregisterReceiver(mPackageEventReceiver);
 		mMessagingBuilder.close();
 		super.onDestroy();
-	}
-
-	private void migrateFromLegacyPreferences() {
-		if (mPreferences.getInt(PREF_KEY_MIGRATED, 0) >= 1) return;
-		final SharedPreferences.Editor editor = mPreferences.edit();
-		try {
-			@SuppressWarnings("deprecation") final Context old_context = createPackageContext(BuildConfig.APPLICATION_ID, 0);
-			final SharedPreferences old_sp = (SDK_INT >= N ? old_context.createDeviceProtectedStorageContext() : old_context)
-					.getSharedPreferences(getDefaultSharedPreferencesName(old_context), 0);
-			final Map<String, ?> old_entries = old_sp.getAll();
-			Log.i(TAG, "Migrate from legacy preferences: " + old_entries);
-			if (old_entries.isEmpty()) return;
-			for (final Map.Entry<String, ?> entry : old_entries.entrySet()) {
-				final Object value = entry.getValue();
-				if (value instanceof Boolean) editor.putBoolean(entry.getKey(), (Boolean) value);	// Only boolean entries in legacy preferences.
-			}
-		} catch (final PackageManager.NameNotFoundException e) {
-			Log.i(TAG, "No legacy preferences to migrate.");
-		} catch (final RuntimeException e) {
-			Log.e(TAG, "Error migrating legacy preferences.", e);
-		}
-		editor.putInt(PREF_KEY_MIGRATED, 1).apply();	// Ensure at least one entry to prevent migration on the next start.
-	}
-	private static final String PREF_KEY_MIGRATED = "migrated";
-
-	private static String getDefaultSharedPreferencesName(final Context context) {
-		return SDK_INT >= N ? PreferenceManager.getDefaultSharedPreferencesName(context) : context.getPackageName() + "_preferences";
 	}
 
 	private static UserHandle userHandleOf(final int user) {
