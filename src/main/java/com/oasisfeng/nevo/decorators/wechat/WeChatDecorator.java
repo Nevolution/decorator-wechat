@@ -85,6 +85,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	static final String AGENT_PACKAGE = "com.oasisfeng.nevo.agents.wechat";
 	static final String CHANNEL_MESSAGE = "message_channel_new_id";				// Channel ID used by WeChat for all message notifications
 	private static final int MAX_NUM_ARCHIVED = 20;
+	private static final int NID_LOGIN_CONFIRMATION = 38;                       // The static notification ID of WeChat login confirmation
 	private static final String OLD_CHANNEL_MESSAGE = "message";				//   old name for migration
 	private static final String CHANNEL_MISC = "reminder_channel_id";			// Channel ID used by WeChat for misc. notifications
 	private static final String OLD_CHANNEL_MISC = "misc";						//   old name for migration
@@ -130,7 +131,9 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 		if (n.tickerText == null/* Legacy misc. notifications */|| CHANNEL_MISC.equals(channel_id)) {
 			if (SDK_INT >= O && channel_id == null) n.setChannelId(CHANNEL_MISC);
-			n.setGroup(GROUP_MISC);        // Avoid being auto-grouped
+			n.setGroup(GROUP_MISC);             // Avoid being auto-grouped
+			if (SDK_INT >= O && evolving.getId() == NID_LOGIN_CONFIRMATION)
+				n.setTimeoutAfter(5 * 60_000);  // The actual timeout for login confirmation is a little shorter than 5 minutes.
 			Log.d(TAG, "Skip further process for non-conversation notification: " + title);    // E.g. web login confirmation notification.
 			return (n.flags & Notification.FLAG_FOREGROUND_SERVICE) == 0;
 		}
