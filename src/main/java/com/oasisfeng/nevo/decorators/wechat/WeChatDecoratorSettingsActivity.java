@@ -51,7 +51,6 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 	private static final int CURRENT_AGENT_VERSION = 1300;
 	private static final String NEVOLUTION_PACKAGE = "com.oasisfeng.nevo";
 	private static final String ANDROID_AUTO_PACKAGE = "com.google.android.projection.gearhead";
-	private static final String AGENT_WECHAT_PACKAGE = "com.oasisfeng.nevo.agents.wechat";
 	private static final String PLAY_STORE_PACKAGE = "com.android.vending";
     private static final String ISLAND_PACKAGE = "com.oasisfeng.island";
 	private static final String APP_MARKET_PREFIX = "market://details?id=";
@@ -110,10 +109,10 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
                 : ! android_auto_unavailable_in_profiles.isEmpty() ? this::showExtensionInIsland : null);
 
 		final Preference preference_agent = findPreference(getString(R.string.pref_agent));
-		final int agent_version = getPackageVersion(AGENT_WECHAT_PACKAGE);
+		final int agent_version = getPackageVersion(WeChatDecorator.AGENT_PACKAGE);
 		preference_agent.setEnabled(wechat_installed);
 		if (agent_version >= CURRENT_AGENT_VERSION) {
-			final Intent launcher_intent = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(AGENT_WECHAT_PACKAGE);
+			final Intent launcher_intent = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(WeChatDecorator.AGENT_PACKAGE);
 			final boolean disabled = pm.queryIntentActivities(launcher_intent, 0).isEmpty();
 			final @StringRes int prefix = (disabled ? R.string.pref_agent_summary_prefix_disabled : R.string.pref_agent_summary_prefix_enabled);
 			preference_agent.setSummary(getString(prefix) + "\n" + getString(R.string.pref_agent_summary_installed));
@@ -126,7 +125,7 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 
 	private boolean selectAgentLabel() {
 		final PackageManager pm = getPackageManager();
-		final Intent query = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(AGENT_WECHAT_PACKAGE);
+		final Intent query = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(WeChatDecorator.AGENT_PACKAGE);
 		final List<ResolveInfo> resolves = pm.queryIntentActivities(query, PackageManager.GET_DISABLED_COMPONENTS);
 		final int size = resolves.size();
 		if (size <= 1) throw new IllegalStateException("No activities found for " + query);
@@ -140,7 +139,7 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		labels[size] = getText(R.string.action_disable_agent_launcher_entrance);
 		new AlertDialog.Builder(this).setSingleChoiceItems(labels, -1, (dialog, which) -> {	// TODO: Item cannot be selected on Sony device?
 			for (int i = 0; i < names.length; i ++)
-				pm.setComponentEnabledSetting(new ComponentName(AGENT_WECHAT_PACKAGE, names[i]),
+				pm.setComponentEnabledSetting(new ComponentName(WeChatDecorator.AGENT_PACKAGE, names[i]),
 						i == which ? COMPONENT_ENABLED_STATE_ENABLED : COMPONENT_ENABLED_STATE_DISABLED, DONT_KILL_APP);
 			dialog.dismiss();
 		}).show();

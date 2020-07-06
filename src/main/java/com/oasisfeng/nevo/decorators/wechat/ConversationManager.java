@@ -21,11 +21,11 @@ import static java.util.Objects.requireNonNull;
  *
  * Created by Oasis on 2019-4-11.
  */
-class ConversationManager {
+public class ConversationManager {
 
 	private static final Person SENDER_PLACEHOLDER = new Person.Builder().setName(" ").build();	// Cannot be empty string, or it will be treated as null.
 
-	static class Conversation {
+	public static class Conversation {
 
 		static final int TYPE_UNKNOWN = 0;
 		static final int TYPE_DIRECT_MESSAGE = 1;
@@ -108,7 +108,7 @@ class ConversationManager {
 		return conversation;
 	}
 
-	Conversation getConversation(final int id) {
+	@Nullable Conversation getConversation(final int id) {
 		return mConversations.get(id);
 	}
 

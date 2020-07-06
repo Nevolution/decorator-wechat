@@ -16,16 +16,20 @@
 
 package com.oasisfeng.nevo.decorators.wechat;
 
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.LocusId;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ShortcutManager;
 import android.graphics.drawable.Icon;
 import android.media.AudioAttributes;
 import android.net.Uri;
@@ -50,6 +54,7 @@ import com.oasisfeng.nevo.sdk.NevoDecoratorService;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -60,11 +65,14 @@ import static android.app.Notification.EXTRA_TITLE;
 import static android.app.Notification.FLAG_GROUP_SUMMARY;
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.N;
+import static android.os.Build.VERSION_CODES.N_MR1;
 import static android.os.Build.VERSION_CODES.O;
 import static android.os.Build.VERSION_CODES.P;
+import static android.os.Build.VERSION_CODES.Q;
 import static android.service.notification.NotificationListenerService.REASON_APP_CANCEL;
 import static android.service.notification.NotificationListenerService.REASON_CANCEL;
 import static android.service.notification.NotificationListenerService.REASON_CHANNEL_BANNED;
+import static java.util.Objects.requireNonNull;
 
 /**
  * Bring state-of-art notification experience to WeChat.
@@ -73,7 +81,8 @@ import static android.service.notification.NotificationListenerService.REASON_CH
  */
 public class WeChatDecorator extends NevoDecoratorService {
 
-	public static final String WECHAT_PACKAGE = "com.tencent.mm";
+	static final String WECHAT_PACKAGE = "com.tencent.mm";
+	static final String AGENT_PACKAGE = "com.oasisfeng.nevo.agents.wechat";
 	static final String CHANNEL_MESSAGE = "message_channel_new_id";				// Channel ID used by WeChat for all message notifications
 	private static final int MAX_NUM_ARCHIVED = 20;
 	private static final String OLD_CHANNEL_MESSAGE = "message";				//   old name for migration
@@ -91,6 +100,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	private static final @ColorInt int PRIMARY_COLOR = 0xFF33B332;
 	private static final @ColorInt int LIGHT_COLOR = 0xFF00FF00;
+	private static final String ACTION_NOTIFICATION_CLICKED = "N_CLICKED";
+	private static final @SuppressLint("InlinedApi") String EXTRA_NOTIFICATION_ID = Notification.EXTRA_NOTIFICATION_ID;
 	static final String ACTION_SETTINGS_CHANGED = "SETTINGS_CHANGED";
 	static final String PREFERENCES_NAME = "decorators-wechat";
 
@@ -105,7 +116,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 			return true;
 		}
 		final Bundle extras = n.extras;
-		CharSequence title = extras.getCharSequence(EXTRA_TITLE);
+		final CharSequence title = extras.getCharSequence(EXTRA_TITLE);
 		if (title == null || title.length() == 0) {
 			Log.e(TAG, "Title is missing: " + evolving);
 			return false;
@@ -171,6 +182,18 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (is_group_chat) messaging.setGroupConversation(true).setConversationTitle(title);
 		MessagingBuilder.flatIntoExtras(messaging, extras);
 		extras.putString(Notification.EXTRA_TEMPLATE, TEMPLATE_MESSAGING);
+
+		if (conversation.key != null) {
+			final String locusId = "C:" + conversation.key;
+			if (SDK_INT >= O) n.setShortcutId(locusId);
+			if (SDK_INT >= Q) n.setLocusId(new LocusId(locusId));
+		}
+
+		if (SDK_INT >= N_MR1 && n.contentIntent != null)    // No need to wrap content intent if dynamic shortcut is not supported.
+			n.contentIntent = getPackageName().equals(n.contentIntent.getCreatorPackage()) ? n.contentIntent    // Possibly already wrapped
+					: PendingIntent.getBroadcast(this, conversation.id, new Intent(ACTION_NOTIFICATION_CLICKED)
+					.putExtra(Intent.EXTRA_INTENT, n.contentIntent).putExtra(EXTRA_NOTIFICATION_ID, conversation.id)
+					.setPackage(getPackageName()), PendingIntent.FLAG_UPDATE_CURRENT);
 		return true;
 	}
 
@@ -207,7 +230,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		return false;
 	}
 
-	private boolean isChannelAvailable(final UserHandle user) {
+	@RequiresApi(O) private boolean isChannelAvailable(final UserHandle user) {
 		return getNotificationChannel(WECHAT_PACKAGE, user, CHANNEL_GROUP_CONVERSATION) != null;
 	}
 
@@ -275,7 +298,11 @@ public class WeChatDecorator extends NevoDecoratorService {
 	}
 
 	@Override public void onCreate() {
-		super.onCreate();
+		//noinspection deprecation
+		if (BuildConfig.DEBUG && SDK_INT >= N_MR1 && new Date().getMinutes() % 5 == 0) try {
+			requireNonNull(createPackageContext(AGENT_PACKAGE, 0).getSystemService(ShortcutManager.class)).removeAllDynamicShortcuts();
+		} catch (final PackageManager.NameNotFoundException ignored) {}
+
 		final Context context = SDK_INT >= N ? createDeviceProtectedStorageContext() : this;
 		//noinspection deprecation
 		mPreferences = context.getSharedPreferences(PREFERENCES_NAME, MODE_MULTI_PROCESS);
@@ -289,6 +316,9 @@ public class WeChatDecorator extends NevoDecoratorService {
 				return mConversationManager.getConversation(id);
 			}
 		});	// Must be called after loadPreferences().
+		mAgentShortcuts = SDK_INT >= N_MR1 ? new AgentShortcuts(this) : null;
+
+		registerReceiver(mNotificationClickReceiver, new IntentFilter(ACTION_NOTIFICATION_CLICKED));
 		final IntentFilter filter = new IntentFilter(Intent.ACTION_PACKAGE_REMOVED); filter.addDataScheme("package");
 		registerReceiver(mPackageEventReceiver, filter);
 		registerReceiver(mSettingsChangedReceiver, new IntentFilter(ACTION_SETTINGS_CHANGED));
@@ -297,8 +327,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 	@Override public void onDestroy() {
 		unregisterReceiver(mSettingsChangedReceiver);
 		unregisterReceiver(mPackageEventReceiver);
+		unregisterReceiver(mNotificationClickReceiver);
 		mMessagingBuilder.close();
-		super.onDestroy();
 	}
 
 	private static UserHandle userHandleOf(final int user) {
@@ -315,6 +345,23 @@ public class WeChatDecorator extends NevoDecoratorService {
 		}
 	}
 
+	private final BroadcastReceiver mNotificationClickReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context context, final Intent intent) {
+		final PendingIntent target = intent.getParcelableExtra(Intent.EXTRA_INTENT);
+		final int id = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0);
+		if (target != null) try {
+			target.send(0, (pi, revealed, i, s, bundle) -> {
+				if (BuildConfig.DEBUG) Log.i(TAG, "Sending: " + revealed.toUri(Intent.URI_INTENT_SCHEME));
+
+				final Conversation conversation = mConversationManager.getConversation(id);
+				if (conversation == null) Log.w(TAG, "Unknown conversation ID: " + id);
+				else if (SDK_INT >= N_MR1 && conversation.isChat() && ! conversation.isBotMessage()) mHandler.post(() -> {    // Async for potentially heavy job
+					try { mAgentShortcuts.publishShortcut(conversation, revealed); }
+					catch (final RuntimeException e) { Log.e(TAG, "Error publishing shortcut for " + conversation.key, e); }
+				});
+			}, mHandler);
+		} catch (final PendingIntent.CanceledException e) { Log.e(TAG, "Unexpected already canceled content intent. ID=" + id); }
+	}};
+
 	private final BroadcastReceiver mPackageEventReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context context, final Intent intent) {
 		if (intent.getData() != null && WECHAT_PACKAGE.equals(intent.getData().getSchemeSpecificPart())) mDistinctIdSupported = null;
 	}};
@@ -330,6 +377,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 	private final ConversationManager mConversationManager = new ConversationManager();
 	private MessagingBuilder mMessagingBuilder;
+	private AgentShortcuts mAgentShortcuts;
 	private boolean mWeChatTargetingO;
 	private boolean mUseExtraChannels = true;	// Extra channels should not be used in Insider mode, as WeChat always removes channels not maintained by itself.
 	private SharedPreferences mPreferences;
