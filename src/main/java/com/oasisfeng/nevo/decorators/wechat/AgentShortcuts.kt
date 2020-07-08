@@ -14,9 +14,9 @@ import android.graphics.drawable.Icon
 import android.os.Build.VERSION.SDK_INT
 import android.os.Build.VERSION_CODES.*
 import android.os.UserManager
-import android.support.annotation.RequiresApi
-import android.support.v4.graphics.drawable.IconCompat
 import android.util.Log
+import androidx.annotation.RequiresApi
+import androidx.core.graphics.drawable.IconCompat
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation
 import com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.AGENT_PACKAGE
 import com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.TAG

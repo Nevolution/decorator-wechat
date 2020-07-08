@@ -43,6 +43,6 @@ android {
 
 dependencies {
     implementation project(':sdk') //implementation 'com.oasisfeng.nevo:sdk:2.0.0-rc01'
-    implementation 'com.android.support:support-compat:28.0.0'
+    implementation 'androidx.core:core:1.3.0'
     implementation 'org.jetbrains.kotlin:kotlin-stdlib-jdk7'
 }

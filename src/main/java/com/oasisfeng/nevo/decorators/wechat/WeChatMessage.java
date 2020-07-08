@@ -2,11 +2,12 @@ package com.oasisfeng.nevo.decorators.wechat;
 
 import android.app.Notification;
 import android.app.Notification.CarExtender;
-import android.support.annotation.Nullable;
-import android.support.v4.app.NotificationCompat.MessagingStyle.Message;
-import android.support.v4.app.Person;
 import android.text.TextUtils;
 import android.util.Log;
+
+import androidx.annotation.Nullable;
+import androidx.core.app.NotificationCompat.MessagingStyle.Message;
+import androidx.core.app.Person;
 
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation;
 

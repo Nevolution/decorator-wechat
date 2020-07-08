@@ -1,8 +1,9 @@
 package com.oasisfeng.nevo.decorators.wechat;
 
-import android.support.annotation.Nullable;
-import android.support.v4.app.NotificationCompat.MessagingStyle.Message;
 import android.text.TextUtils;
+
+import androidx.annotation.Nullable;
+import androidx.core.app.NotificationCompat.MessagingStyle.Message;
 
 /**
  * A no-smart implementation for Smart Reply

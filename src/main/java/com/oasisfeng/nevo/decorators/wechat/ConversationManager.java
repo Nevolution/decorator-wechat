@@ -1,14 +1,15 @@
 package com.oasisfeng.nevo.decorators.wechat;
 
 import android.app.Notification;
-import android.support.annotation.IntDef;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
-import android.support.v4.app.Person;
-import android.support.v4.graphics.drawable.IconCompat;
 import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.SparseArray;
+
+import androidx.annotation.IntDef;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.core.app.Person;
+import androidx.core.graphics.drawable.IconCompat;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
