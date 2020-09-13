@@ -1,5 +1,6 @@
 package com.oasisfeng.nevo.decorators.wechat
 
+import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -7,66 +8,82 @@ import android.content.LocusId
 import android.content.pm.PackageManager
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.drawable.AdaptiveIconDrawable
-import android.graphics.drawable.Icon
 import android.os.Build.VERSION.SDK_INT
-import android.os.Build.VERSION_CODES.*
+import android.os.Build.VERSION_CODES.N
+import android.os.Build.VERSION_CODES.N_MR1
+import android.os.Build.VERSION_CODES.Q
+import android.os.Handler
+import android.os.Process
+import android.os.UserHandle
 import android.os.UserManager
 import android.util.Log
+import android.util.LruCache
 import androidx.annotation.RequiresApi
-import androidx.core.graphics.drawable.IconCompat
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation
 import com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.AGENT_PACKAGE
 import com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.TAG
+import com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.WECHAT_PACKAGE
+import java.lang.reflect.Method
 
 @RequiresApi(N_MR1) class AgentShortcuts(private val context: Context) {
 
-	fun publishShortcut(conversation: Conversation, intent: Intent): Boolean {
-		val locusId = conversation.key ?: return false      // Lack of proper persistent ID
-		if (SDK_INT >= N && context.getSystemService(UserManager::class.java)?.isUserUnlocked == false) return false // Shortcuts cannot be changed if user is locked.
+	private fun publishShortcut(conversation: Conversation, profile: UserHandle): Boolean {
+		val key = conversation.key ?: return false      // Lack of proper persistent ID
+		val agentContext = createAgentContext(profile) ?: return false
+		if (SDK_INT >= N && agentContext.getSystemService(UserManager::class.java)?.isUserUnlocked == false) return false // Shortcuts cannot be changed if user is locked.
 
-		val activity = context.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN)
+		val activity = agentContext.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN)   // Use agent context to resolve in proper user.
 				.addCategory(Intent.CATEGORY_LAUNCHER).setPackage(AGENT_PACKAGE), 0)?.activityInfo?.name
 				?: return true   // Agent is not installed or its launcher activity is disabled.
 
-		val agentContext = try { context.createPackageContext(AGENT_PACKAGE, 0) }
-		catch (e: PackageManager.NameNotFoundException) { return true }
-
-		val sm = agentContext.getSystemService(ShortcutManager::class.java) ?: return true
+		val sm = agentContext.getShortcutManager() ?: return false
 		if (sm.isRateLimitingActive)
-			return true.also { Log.w(WeChatDecorator.TAG, "Due to rate limit, shortcut is not updated: " + conversation.key) }
+			return true.also { Log.w(TAG, "Due to rate limit, shortcut is not updated: $key") }
 
-		val shortcuts = sm.dynamicShortcuts; val count = shortcuts.size
-		shortcuts.forEachIndexed { i, shortcut ->   // TODO: This is insufficient as it cannot affect the order of shortcuts returned next time.
-			if (locusId == shortcut.id) return true.also { if (i != count - 1) shortcuts.add(shortcuts.removeAt(i)) }}  // Move to the end (latest)
+		val shortcuts = sm.dynamicShortcuts.apply { sortBy { it.rank }}; val count = shortcuts.size
+		shortcuts.forEach { shortcut -> if (key == shortcut.id) return true }
 		if (count >= sm.maxShortcutCountPerActivity - sm.manifestShortcuts.size)
 			sm.removeDynamicShortcuts(listOf(shortcuts.removeAt(0).id))
 
-		val shortcut = ShortcutInfo.Builder(agentContext, locusId).setActivity(ComponentName(AGENT_PACKAGE, activity))
-				.setShortLabel(conversation.title).setRank(if (conversation.isGroupChat) 1 else 0)  // TODO: setPerson()
+		val intent = Intent().setComponent(ComponentName(WECHAT_PACKAGE, "com.tencent.mm.ui.LauncherUI"))
+				.putExtra("Main_User", key).putExtra(@Suppress("SpellCheckingInspection") "Intro_Is_Muti_Talker", false)
+				.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+		val shortcut = ShortcutInfo.Builder(agentContext, key).setActivity(ComponentName(AGENT_PACKAGE, activity))
+				.setShortLabel(conversation.title).setRank(if (conversation.isGroupChat) 1 else 0)  // Always keep last direct message conversation on top.
 				.setIntent(intent.apply { if (action == null) action = Intent.ACTION_MAIN })
 				.setCategories(setOf(ShortcutInfo.SHORTCUT_CATEGORY_CONVERSATION)).apply {
-					if (SDK_INT >= Q) setLongLived(true).setLocusId(LocusId(locusId))
-					if (conversation.icon != null) setIcon(convertToAdaptiveIcon(sm, conversation.icon)) }.build()
-		if (sm.addDynamicShortcuts(listOf(shortcut))) Log.i(TAG, "Shortcut published for " + conversation.key)
+					if (conversation.icon != null) setIcon(IconHelper.convertToAdaptiveIcon(context, sm, conversation.icon))
+					if (SDK_INT >= Q) @SuppressLint("RestrictedApi") {
+						setLongLived(true).setLocusId(LocusId(key))
+						if (! conversation.isGroupChat) setPerson(conversation.sender().build().toAndroidPerson()) }}
+		if (sm.addDynamicShortcuts(listOf(shortcut.build()))) Log.i(TAG, "Shortcut published for $key")
 		else Log.e(TAG, "Unexpected rate limit.")
 		return false
 	}
 
-	private fun convertToAdaptiveIcon(sm: ShortcutManager, source: IconCompat): Icon
-			= if (SDK_INT < O) source.toIcon() else when (source.type) {
-				Icon.TYPE_ADAPTIVE_BITMAP, Icon.TYPE_RESOURCE -> source.toIcon()
-				else -> Icon.createWithAdaptiveBitmap(drawableToBitmap(sm, source)) }
+	private fun createAgentContext(profile: UserHandle): Context?
+		= try {
+			if (profile == Process.myUserHandle()) context.createPackageContext(AGENT_PACKAGE, 0)
+			else mMethodCreatePackageContextAsUser?.invoke(context, AGENT_PACKAGE, 0, profile) as? Context }
+		catch (e: PackageManager.NameNotFoundException) { null }
+		catch (e: RuntimeException) { null.also { Log.e(TAG, "Error creating context for agent in user ${profile.hashCode()}", e) }}
 
-	@RequiresApi(O) private fun drawableToBitmap(sm: ShortcutManager, icon: IconCompat): Bitmap {
-		val extraInsetFraction = AdaptiveIconDrawable.getExtraInsetFraction()
-		val width = sm.iconMaxWidth; val height = sm.iconMaxHeight
-		val xInset = (width * extraInsetFraction).toInt(); val yInset = (height * extraInsetFraction).toInt()
-		return Bitmap.createBitmap(width + xInset * 2, height + yInset * 2, Bitmap.Config.ARGB_8888).also { bitmap ->
-			icon.loadDrawable(context).apply {
-				setBounds(xInset, yInset, width + xInset, height + yInset)
-				draw(Canvas(bitmap)) }}
+	fun scheduleShortcutUpdateIfNeeded(conversation: Conversation, profile: UserHandle, handler: Handler) {
+		val key = conversation.key
+		if (SDK_INT < N_MR1 || key == null || ! conversation.isChat || conversation.isBotMessage) return
+		if (mDynamicShortcutContacts.get(key) == null) {
+			mDynamicShortcutContacts.put(key, Unit)
+			handler.post {    // Async for potentially heavy task
+				try { publishShortcut(conversation, profile) }
+				catch (e: RuntimeException) { Log.e(TAG, "Error publishing shortcut for $key", e) }}}
 	}
+
+	private fun Context.getShortcutManager() = getSystemService(ShortcutManager::class.java)
+
+	/** Local mark to reduce repeated shortcut updates */
+	private val mDynamicShortcutContacts = LruCache<String, Unit>(3)    // Do not rely on maxShortcutCountPerActivity(), as most launcher only display top 4 shortcuts (including manifest shortcuts)
+
+	//	private val mShortcutIdsByProfile = SparseArray<Set<Int>>()
+	private val mMethodCreatePackageContextAsUser: Method? by lazy {
+		try { Context::class.java.getMethod("createPackageContextAsUser") } catch (e: ReflectiveOperationException) { null }}
 }
