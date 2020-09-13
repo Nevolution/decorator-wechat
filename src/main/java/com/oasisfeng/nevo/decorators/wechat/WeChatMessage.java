@@ -102,7 +102,7 @@ class WeChatMessage {
 		final CharSequence count = length > 1 && ! Character.isDigit(prefix.charAt(length - 1)) ? prefix.subSequence(0, length - 1) : prefix;
 		try {
 			return Integer.parseInt(count.toString());
-		} catch (final NumberFormatException ignored) {
+		} catch (final NumberFormatException ignored) {     // Probably just emoji like "[Cry]"
 			Log.d(TAG, "Failed to parse as int: " + prefix);
 			return 0;
 		}

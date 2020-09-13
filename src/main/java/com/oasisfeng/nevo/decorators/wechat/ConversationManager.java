@@ -39,7 +39,7 @@ public class ConversationManager {
 		private static final String SCHEME_ORIGINAL_NAME = "ON:";
 
 		final int id;
-		@Nullable String key;
+		@Nullable String key;       // The user name in WeChat
 		int count;
 		CharSequence title;
 		CharSequence summary;
