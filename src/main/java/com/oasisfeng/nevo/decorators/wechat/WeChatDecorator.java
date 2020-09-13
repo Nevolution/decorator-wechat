@@ -32,6 +32,7 @@ import android.content.pm.ShortcutManager;
 import android.graphics.drawable.Icon;
 import android.media.AudioAttributes;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Parcel;
@@ -45,6 +46,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.StringRes;
 import androidx.core.app.NotificationCompat.MessagingStyle;
+import androidx.core.app.Person;
 import androidx.core.graphics.drawable.IconCompat;
 
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation;
@@ -58,6 +60,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import static android.app.Notification.EXTRA_REMOTE_INPUT_HISTORY;
 import static android.app.Notification.EXTRA_SUB_TEXT;
 import static android.app.Notification.EXTRA_TEXT;
 import static android.app.Notification.EXTRA_TITLE;
@@ -138,8 +141,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final CharSequence content_text = extras.getCharSequence(EXTRA_TEXT);
 		if (content_text == null) return true;
 
-		if (SDK_INT >= N && extras.getCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY) != null)
-			n.flags |= Notification.FLAG_ONLY_ALERT_ONCE;		// No more alert for direct-replied notification.
+		final CharSequence[] input_history = SDK_INT >= N ? extras.getCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY) : null;
+		if (input_history != null) n.flags |= Notification.FLAG_ONLY_ALERT_ONCE;      // No more alert for direct-replied notification.
 
 		// WeChat previously uses dynamic counter starting from 4097 as notification ID, which is reused after cancelled by WeChat itself,
 		//   causing conversation duplicate or overwritten notifications.
@@ -168,6 +171,14 @@ public class WeChatDecorator extends NevoDecoratorService {
 		if (messaging == null) return true;
 		final List<MessagingStyle.Message> messages = messaging.getMessages();
 		if (messages.isEmpty()) return true;
+
+		if (SDK_INT >= Build.VERSION_CODES.R && input_history != null) {
+			for (int i = input_history.length - 1; i >= 0; i--) {
+				final CharSequence input = input_history[i];
+				messages.add(new MessagingStyle.Message(input, 0L, (Person) null));
+			}
+			extras.remove(EXTRA_REMOTE_INPUT_HISTORY);
+		}
 
 		final boolean is_group_chat = conversation.isGroupChat();
 		if (SDK_INT >= P && KEY_SERVICE_MESSAGE.equals(conversation.key)) {     // Setting conversation title before Android P will make it a group chat.
