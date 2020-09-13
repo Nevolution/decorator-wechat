@@ -16,6 +16,7 @@ import android.content.IntentFilter;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Process;
+import android.os.UserHandle;
 import android.service.notification.StatusBarNotification;
 import android.text.TextUtils;
 import android.util.ArrayMap;
@@ -84,7 +85,6 @@ class MessagingBuilder {
 	private static final String KEY_EXTRAS_BUNDLE = "extras";
 
 	private static final String KEY_USERNAME = "key_username";
-	private static final String MENTION_SEPARATOR = " ";			// Separator between @nick and text. It's not a regular white space, but U+2005.
 
 	@Nullable MessagingStyle buildFromArchive(final Conversation conversation, final Notification n, final CharSequence title, final List<StatusBarNotification> archive) {
 		// Chat history in big content view
@@ -173,7 +173,7 @@ class MessagingBuilder {
 		final RemoteInput remote_input;
 		if (SDK_INT >= N && on_reply != null && (remote_input = ext.getRemoteInput()) != null && conversation.isChat()) {
 			final CharSequence[] input_history = n.extras.getCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY);
-			final PendingIntent proxy = proxyDirectReply(conversation.id, sbn, on_reply, remote_input, input_history, null);
+			final PendingIntent proxy = proxyDirectReply(conversation.id, sbn, on_reply, remote_input, input_history);
 			final RemoteInput.Builder reply_remote_input = new RemoteInput.Builder(remote_input.getResultKey()).addExtras(remote_input.getExtras())
 					.setAllowFreeFormInput(true).setChoices(SmartReply.generateChoices(messages));
 			final String participant = ext.getParticipant();	// No need to getParticipants() due to actually only one participant at most, see CarExtender.Builder().
@@ -252,12 +252,12 @@ class MessagingBuilder {
 
 	/** Intercept the PendingIntent in RemoteInput to update the notification with replied message upon success. */
 	private PendingIntent proxyDirectReply(final int cid, final MutableStatusBarNotification sbn, final PendingIntent on_reply,
-			final RemoteInput remote_input, final @Nullable CharSequence[] input_history, final @Nullable String mention_prefix) {
-		final Intent proxy = new Intent(mention_prefix != null ? ACTION_MENTION : ACTION_REPLY)		// Separate action to avoid PendingIntent overwrite.
+	                                       final RemoteInput remote_input, final @Nullable CharSequence[] input_history) {
+		final Intent proxy = new Intent(ACTION_REPLY)		// Separate action to avoid PendingIntent overwrite.
 				.setData(Uri.fromParts(SCHEME_KEY, sbn.getKey(), null))
 				.putExtra(EXTRA_REPLY_ACTION, on_reply).putExtra(EXTRA_RESULT_KEY, remote_input.getResultKey())
-				.putExtra(EXTRA_ORIGINAL_KEY, sbn.getOriginalKey()).putExtra(EXTRA_CONVERSATION_ID, cid);
-		if (mention_prefix != null) proxy.putExtra(EXTRA_REPLY_PREFIX, mention_prefix);
+				.putExtra(EXTRA_ORIGINAL_KEY, sbn.getOriginalKey()).putExtra(EXTRA_CONVERSATION_ID, cid)
+				.putExtra(Intent.EXTRA_USER, sbn.getUser());
 		if (SDK_INT >= N && input_history != null)
 			proxy.putCharSequenceArrayListExtra(EXTRA_REMOTE_INPUT_HISTORY, new ArrayList<>(Arrays.asList(input_history)));
 		return PendingIntent.getBroadcast(mContext, 0, proxy.setPackage(mContext.getPackageName()), FLAG_UPDATE_CURRENT);
@@ -267,12 +267,13 @@ class MessagingBuilder {
 		final PendingIntent reply_action = proxy.getParcelableExtra(EXTRA_REPLY_ACTION);
 		final String result_key = proxy.getStringExtra(EXTRA_RESULT_KEY), reply_prefix = proxy.getStringExtra(EXTRA_REPLY_PREFIX);
 		final Uri data = proxy.getData(); final Bundle results = RemoteInput.getResultsFromIntent(proxy);
+		final UserHandle user = proxy.getParcelableExtra(Intent.EXTRA_USER);
 		final CharSequence input = results != null ? results.getCharSequence(result_key) : null;
-		if (data == null || reply_action == null || result_key == null || input == null) return;	// Should never happen
+		if (data == null || reply_action == null || result_key == null || input == null || user == null) return; // Should never happen
 
 		final String key = data.getSchemeSpecificPart(), original_key = proxy.getStringExtra(EXTRA_ORIGINAL_KEY);
 		if (BuildConfig.DEBUG && "debug".equals(input.toString())) {
-			final Conversation conversation = mController.getConversation(proxy.getIntExtra(EXTRA_CONVERSATION_ID, 0));
+			final Conversation conversation = mController.getConversation(user, proxy.getIntExtra(EXTRA_CONVERSATION_ID, 0));
 			if (conversation != null) showDebugNotification(conversation, "Type: " + conversation.typeToString());
 			mController.recastNotification(original_key != null ? original_key : key, null);
 			return;
@@ -368,7 +369,7 @@ class MessagingBuilder {
 
 	interface Controller {
 		void recastNotification(String key, Bundle addition);
-		Conversation getConversation(int title_hash);
+		Conversation getConversation(final UserHandle user, int id);
 	}
 
 	MessagingBuilder(final Context context, final Controller controller) {

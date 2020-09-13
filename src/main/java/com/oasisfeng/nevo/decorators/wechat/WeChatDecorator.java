@@ -146,13 +146,13 @@ public class WeChatDecorator extends NevoDecoratorService {
 
 		// WeChat previously uses dynamic counter starting from 4097 as notification ID, which is reused after cancelled by WeChat itself,
 		//   causing conversation duplicate or overwritten notifications.
-		final String pkg = evolving.getPackageName();
+		final String pkg = evolving.getPackageName(); final UserHandle profile = evolving.getUser();
 		final Conversation conversation;
 		if (! isDistinctId(n, pkg)) {
 			final int title_hash = title.hashCode();	// Not using the hash code of original title, which might have already evolved.
 			evolving.setId(title_hash);
-			conversation = mConversationManager.getOrCreateConversation(title_hash);
-		} else conversation = mConversationManager.getOrCreateConversation(evolving.getOriginalId());
+			conversation = mConversationManager.getOrCreateConversation(profile, title_hash);
+		} else conversation = mConversationManager.getOrCreateConversation(profile, evolving.getOriginalId());
 
 		final Icon icon = n.getLargeIcon();
 		conversation.icon = icon != null ? IconCompat.createFromIcon(this, icon) : null;
@@ -316,8 +316,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 			@Override public void recastNotification(final String key, final Bundle addition) {
 				WeChatDecorator.this.recastNotification(key, addition);
 			}
-			@Override public Conversation getConversation(final int id) {
-				return mConversationManager.getConversation(id);
+			@Override public Conversation getConversation(final UserHandle user, final int id) {
+				return mConversationManager.getConversation(user, id);
 			}
 		});	// Must be called after loadPreferences().
 		mAgentShortcuts = SDK_INT >= N_MR1 ? new AgentShortcuts(this) : null;

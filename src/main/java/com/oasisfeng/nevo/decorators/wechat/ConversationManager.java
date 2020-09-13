@@ -1,6 +1,7 @@
 package com.oasisfeng.nevo.decorators.wechat;
 
 import android.app.Notification;
+import android.os.UserHandle;
 import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.SparseArray;
@@ -103,15 +104,19 @@ public class ConversationManager {
 		private final Map<String, Person> mParticipants = new ArrayMap<>();
 	}
 
-	Conversation getOrCreateConversation(final int id) {
-		Conversation conversation = mConversations.get(id);
-		if (conversation == null) mConversations.put(id, conversation = new Conversation(id));
+	Conversation getOrCreateConversation(final UserHandle profile, final int id) {
+		final int profileId = profile.hashCode();
+		SparseArray<Conversation> conversations = mConversations.get(profileId);
+		if (conversations == null) mConversations.put(profileId, conversations = new SparseArray<>());
+		Conversation conversation = conversations.get(id);
+		if (conversation == null) conversations.put(id, conversation = new Conversation(id));
 		return conversation;
 	}
 
-	@Nullable Conversation getConversation(final int id) {
-		return mConversations.get(id);
+	@Nullable Conversation getConversation(final UserHandle user, final int id) {
+		final SparseArray<Conversation> conversations = mConversations.get(user.hashCode());
+		return conversations == null ? null : conversations.get(id);
 	}
 
-	private final SparseArray<Conversation> mConversations = new SparseArray<>();
+	private final SparseArray<SparseArray/* profile ID */<Conversation>> mConversations = new SparseArray<>();
 }
