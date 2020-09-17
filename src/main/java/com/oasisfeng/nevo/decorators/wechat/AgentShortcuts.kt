@@ -12,7 +12,6 @@ import android.os.Build.VERSION.SDK_INT
 import android.os.Build.VERSION_CODES.N
 import android.os.Build.VERSION_CODES.N_MR1
 import android.os.Build.VERSION_CODES.Q
-import android.os.Handler
 import android.os.Process
 import android.os.UserHandle
 import android.os.UserManager
@@ -31,27 +30,27 @@ import java.lang.reflect.Method
 		fun buildShortcutId(key: String) = "C:$key"
 	}
 
-	private fun publishShortcut(conversation: Conversation, profile: UserHandle): Boolean {
-		val key = conversation.key ?: return false      // Lack of proper persistent ID
+	private fun updateShortcut(conversation: Conversation, profile: UserHandle): Boolean {
+		val key = conversation.key ?: return false.also { Log.i(TAG, "Postpone shortcut update until conversation key is fetched.") }
 		val agentContext = createAgentContext(profile) ?: return false
 		if (SDK_INT >= N && agentContext.getSystemService(UserManager::class.java)?.isUserUnlocked == false) return false // Shortcuts cannot be changed if user is locked.
 
 		val activity = agentContext.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN)   // Use agent context to resolve in proper user.
 				.addCategory(Intent.CATEGORY_LAUNCHER).setPackage(AGENT_PACKAGE), 0)?.activityInfo?.name
-				?: return true   // Agent is not installed or its launcher activity is disabled.
+				?: return false.also { Log.d(TAG, "No shortcut update due to lack of agent launcher activity") }
 
 		val sm = agentContext.getShortcutManager() ?: return false
 		if (sm.isRateLimitingActive)
-			return true.also { Log.w(TAG, "Due to rate limit, shortcut is not updated: $key") }
+			return false.also { Log.w(TAG, "Due to rate limit, shortcut is not updated: $key") }
 
 		val shortcuts = sm.dynamicShortcuts.apply { sortBy { it.rank }}; val count = shortcuts.size
-		shortcuts.forEach { shortcut -> if (key == shortcut.id) return true }
+		shortcuts.forEach { shortcut -> if (buildShortcutId(key) == shortcut.id) return true }
 		if (count >= sm.maxShortcutCountPerActivity - sm.manifestShortcuts.size)
 			sm.removeDynamicShortcuts(listOf(shortcuts.removeAt(0).id))
 
 		val intent = Intent().setComponent(ComponentName(WECHAT_PACKAGE, "com.tencent.mm.ui.LauncherUI"))
 				.putExtra("Main_User", key).putExtra(@Suppress("SpellCheckingInspection") "Intro_Is_Muti_Talker", false)
-				.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+				.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
 		val shortcut = ShortcutInfo.Builder(agentContext, buildShortcutId(key)).setActivity(ComponentName(AGENT_PACKAGE, activity))
 				.setShortLabel(conversation.title).setRank(if (conversation.isGroupChat) 1 else 0)  // Always keep last direct message conversation on top.
 				.setIntent(intent.apply { if (action == null) action = Intent.ACTION_MAIN })
@@ -60,9 +59,8 @@ import java.lang.reflect.Method
 					if (SDK_INT >= Q) @SuppressLint("RestrictedApi") {
 						setLongLived(true).setLocusId(LocusId(key))
 						if (! conversation.isGroupChat) setPerson(conversation.sender().build().toAndroidPerson()) }}
-		if (sm.addDynamicShortcuts(listOf(shortcut.build()))) Log.i(TAG, "Shortcut published for $key")
-		else Log.e(TAG, "Unexpected rate limit.")
-		return false
+		return if (sm.addDynamicShortcuts(listOf(shortcut.build()))) true.also { Log.i(TAG, "Shortcut updated for $key") }
+		else false.also { Log.e(TAG, "Unexpected rate limit.") }
 	}
 
 	private fun createAgentContext(profile: UserHandle): Context?
@@ -72,14 +70,12 @@ import java.lang.reflect.Method
 		catch (e: PackageManager.NameNotFoundException) { null }
 		catch (e: RuntimeException) { null.also { Log.e(TAG, "Error creating context for agent in user ${profile.hashCode()}", e) }}
 
-	fun scheduleShortcutUpdateIfNeeded(conversation: Conversation, profile: UserHandle, handler: Handler) {
+	fun updateShortcutIfNeeded(conversation: Conversation, profile: UserHandle) {
 		val key = conversation.key
 		if (SDK_INT < N_MR1 || key == null || ! conversation.isChat || conversation.isBotMessage) return
 		if (mDynamicShortcutContacts.get(key) == null) {
-			mDynamicShortcutContacts.put(key, Unit)
-			handler.post {    // Async for potentially heavy task
-				try { publishShortcut(conversation, profile) }
-				catch (e: RuntimeException) { Log.e(TAG, "Error publishing shortcut for $key", e) }}}
+			try { if (updateShortcut(conversation, profile)) mDynamicShortcutContacts.put(key, Unit) }
+			catch (e: RuntimeException) { Log.e(TAG, "Error publishing shortcut for $key", e) }}
 	}
 
 	private fun Context.getShortcutManager() = getSystemService(ShortcutManager::class.java)

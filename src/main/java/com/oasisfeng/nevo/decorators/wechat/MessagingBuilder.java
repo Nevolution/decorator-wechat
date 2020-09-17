@@ -30,6 +30,7 @@ import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat.MessagingStyle;
 import androidx.core.app.NotificationCompat.MessagingStyle.Message;
 import androidx.core.app.Person;
+import androidx.core.util.Consumer;
 
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation;
 import com.oasisfeng.nevo.sdk.MutableNotification;
@@ -51,10 +52,6 @@ import static androidx.core.app.NotificationCompat.EXTRA_CONVERSATION_TITLE;
 import static androidx.core.app.NotificationCompat.EXTRA_IS_GROUP_CONVERSATION;
 import static androidx.core.app.NotificationCompat.EXTRA_MESSAGES;
 import static androidx.core.app.NotificationCompat.EXTRA_SELF_DISPLAY_NAME;
-import static com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation.TYPE_BOT_MESSAGE;
-import static com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation.TYPE_DIRECT_MESSAGE;
-import static com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation.TYPE_GROUP_CHAT;
-import static com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation.TYPE_UNKNOWN;
 import static com.oasisfeng.nevo.decorators.wechat.WeChatMessage.SENDER_MESSAGE_SEPARATOR;
 import static java.util.Objects.requireNonNull;
 
@@ -138,28 +135,18 @@ class MessagingBuilder {
 		return messaging;
 	}
 
-	@Nullable MessagingStyle buildFromConversation(final Conversation conversation, final MutableStatusBarNotification sbn) {
+	@Nullable MessagingStyle buildFromConversation(final Conversation conversation,
+			final MutableStatusBarNotification sbn, final Consumer<String> conversation_key_receiver) {
 		final CarExtender.UnreadConversation ext = conversation.ext;
 		if (ext == null) return null;
 		final MutableNotification n = sbn.getNotification();
 		final long latest_timestamp = ext.getLatestTimestamp();
 		if (latest_timestamp > 0) n.when = conversation.timestamp = latest_timestamp;
 
-		final PendingIntent on_reply = ext.getReplyPendingIntent(); final String n_key = sbn.getKey();
+		final PendingIntent on_reply = ext.getReplyPendingIntent();
 		if (conversation.key == null && on_reply != null) try {
-			final PendingIntent.OnFinished callback = (p, intent, r, d, b) -> {
-				final String key = conversation.key = intent.getStringExtra(KEY_USERNAME);    // setType() below will trigger rebuilding of conversation sender.
-				if (key == null) return;
-				final int type = key.endsWith("@chatroom") || key.endsWith("@im.chatroom"/* WeWork */) ? TYPE_GROUP_CHAT
-						: key.startsWith("gh_") || key.equals(WeChatDecorator.KEY_SERVICE_MESSAGE) ? TYPE_BOT_MESSAGE
-						: key.endsWith("@openim") ? TYPE_DIRECT_MESSAGE : TYPE_UNKNOWN;
-				final int previous_type;
-				if (type != TYPE_UNKNOWN && (previous_type = conversation.setType(type)) != type) {
-					if (previous_type != TYPE_UNKNOWN || type != TYPE_DIRECT_MESSAGE)
-						mController.recastNotification(n_key, null);    // Recast to modify the group, except for "unknown -> direct".
-					if (BuildConfig.DEBUG) showDebugNotification(conversation, "Type " + type + " << " + previous_type);
-				}
-			};
+			final PendingIntent.OnFinished callback = (p, intent, r, d, b) ->
+					conversation_key_receiver.accept(intent.getStringExtra(KEY_USERNAME));
 			on_reply.send(mContext, 0, new Intent(""/* noop */), callback, null);
 		} catch (final PendingIntent.CanceledException e) {
 			Log.e(TAG, "Error parsing reply intent.", e);
@@ -191,15 +178,15 @@ class MessagingBuilder {
 		return messaging;
 	}
 
-	private void showDebugNotification(final Conversation convs, final @Nullable String summary) {
+	static void showDebugNotification(final Context context, final Conversation convs, final @Nullable String summary) {
 		final StringBuilder bigText = new StringBuilder().append(convs.summary).append("\nT:").append(convs.ticker);
 		final String[] messages = convs.ext != null ? convs.ext.getMessages() : null;
 		if (messages != null) for (final String msg : messages) bigText.append("\n").append(msg);
-		final Builder n = new Builder(mContext).setSmallIcon(android.R.drawable.stat_sys_warning)
+		final Builder n = new Builder(context).setSmallIcon(android.R.drawable.stat_sys_warning)
 				.setContentTitle(convs.key).setContentText(convs.ticker).setSubText(summary).setShowWhen(true)
 				.setStyle(new BigTextStyle().setBigContentTitle(convs.title).bigText(bigText.toString()));
 		if (SDK_INT >= O) n.setChannelId("Debug");
-		requireNonNull(mContext.getSystemService(NotificationManager.class))
+		requireNonNull(context.getSystemService(NotificationManager.class))
 				.notify(convs.key != null ? convs.key.hashCode() : convs.title.hashCode(), n.build());
 	}
 
@@ -274,7 +261,7 @@ class MessagingBuilder {
 		final String key = data.getSchemeSpecificPart(), original_key = proxy.getStringExtra(EXTRA_ORIGINAL_KEY);
 		if (BuildConfig.DEBUG && "debug".equals(input.toString())) {
 			final Conversation conversation = mController.getConversation(user, proxy.getIntExtra(EXTRA_CONVERSATION_ID, 0));
-			if (conversation != null) showDebugNotification(conversation, "Type: " + conversation.typeToString());
+			if (conversation != null) showDebugNotification(mContext, conversation, "Type: " + conversation.typeToString());
 			mController.recastNotification(original_key != null ? original_key : key, null);
 			return;
 		}
