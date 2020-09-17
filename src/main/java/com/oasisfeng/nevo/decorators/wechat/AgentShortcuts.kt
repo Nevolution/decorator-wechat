@@ -27,6 +27,10 @@ import java.lang.reflect.Method
 
 @RequiresApi(N_MR1) class AgentShortcuts(private val context: Context) {
 
+	companion object {
+		fun buildShortcutId(key: String) = "C:$key"
+	}
+
 	private fun publishShortcut(conversation: Conversation, profile: UserHandle): Boolean {
 		val key = conversation.key ?: return false      // Lack of proper persistent ID
 		val agentContext = createAgentContext(profile) ?: return false
@@ -48,7 +52,7 @@ import java.lang.reflect.Method
 		val intent = Intent().setComponent(ComponentName(WECHAT_PACKAGE, "com.tencent.mm.ui.LauncherUI"))
 				.putExtra("Main_User", key).putExtra(@Suppress("SpellCheckingInspection") "Intro_Is_Muti_Talker", false)
 				.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-		val shortcut = ShortcutInfo.Builder(agentContext, key).setActivity(ComponentName(AGENT_PACKAGE, activity))
+		val shortcut = ShortcutInfo.Builder(agentContext, buildShortcutId(key)).setActivity(ComponentName(AGENT_PACKAGE, activity))
 				.setShortLabel(conversation.title).setRank(if (conversation.isGroupChat) 1 else 0)  // Always keep last direct message conversation on top.
 				.setIntent(intent.apply { if (action == null) action = Intent.ACTION_MAIN })
 				.setCategories(setOf(ShortcutInfo.SHORTCUT_CATEGORY_CONVERSATION)).apply {

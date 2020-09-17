@@ -195,9 +195,9 @@ public class WeChatDecorator extends NevoDecoratorService {
 		MessagingBuilder.flatIntoExtras(messaging, extras);
 		extras.putString(Notification.EXTRA_TEMPLATE, TEMPLATE_MESSAGING);
 
-		if (conversation.key != null) {
-			final String locusId = "C:" + conversation.key;
-			if (SDK_INT >= O) n.setShortcutId(locusId);
+		if (SDK_INT >= O && conversation.key != null) {
+			final String locusId = AgentShortcuts.Companion.buildShortcutId(conversation.key);
+			n.setShortcutId(locusId);
 			if (SDK_INT >= Q) {
 				n.setLocusId(new LocusId(locusId));
 				if (SDK_INT > Q) n.setBubbleMetadata(new Notification.BubbleMetadata.Builder(locusId).build());
