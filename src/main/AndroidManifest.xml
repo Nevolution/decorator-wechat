@@ -20,6 +20,12 @@
 
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <queries>
+        <package android:name="com.tencent.mm" />
+        <package android:name="com.oasisfeng.nevo" />
+        <package android:name="com.oasisfeng.nevo.agents.wechat" />
+    </queries>
+
     <!-- Backup is intentionally disabled to avoid service interruption during backup. -->
     <application android:label="@string/decorator_wechat_label" android:allowBackup="false" tools:ignore="GoogleAppIndexingWarning">
 
