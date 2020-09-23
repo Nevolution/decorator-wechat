@@ -88,7 +88,7 @@ import static com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversat
 public class WeChatDecorator extends NevoDecoratorService {
 
 	static final String WECHAT_PACKAGE = "com.tencent.mm";
-	static final String AGENT_PACKAGE = "com.oasisfeng.nevo.agents.wechat";
+	static final String AGENT_PACKAGE = "com.oasisfeng.nevo.agents.v1.wechat";
 	static final String CHANNEL_MESSAGE = "message_channel_new_id";				// Channel ID used by WeChat for all message notifications
 	private static final int MAX_NUM_ARCHIVED = 20;
 	private static final int NID_LOGIN_CONFIRMATION = 38;                       // The static notification ID of WeChat login confirmation

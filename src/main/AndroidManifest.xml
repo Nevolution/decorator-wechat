@@ -19,11 +19,13 @@
           package="com.oasisfeng.nevo.decorators.wechat" android:versionCode="30000" android:versionName="3.0">
 
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" /> <!-- WeChatDecoratorSettingsActivity (ACTION_UNINSTALL_PACKAGE) -->
 
     <queries>
         <package android:name="com.tencent.mm" />
         <package android:name="com.oasisfeng.nevo" />
         <package android:name="com.oasisfeng.nevo.agents.wechat" />
+        <package android:name="com.oasisfeng.nevo.agents.v1.wechat" />
     </queries>
 
     <!-- Backup is intentionally disabled to avoid service interruption during backup. -->

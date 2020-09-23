@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static android.content.Intent.ACTION_UNINSTALL_PACKAGE;
 import static android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION;
 import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
 import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
@@ -55,6 +56,7 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 	private static final String PLAY_STORE_PACKAGE = "com.android.vending";
     private static final String ISLAND_PACKAGE = "com.oasisfeng.island";
 	private static final String APP_MARKET_PREFIX = "market://details?id=";
+	private static final String AGENT_LEGACY_PACKAGE = "com.oasisfeng.nevo.agents.wechat";
 
 	@Override protected void onCreate(@Nullable final Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -110,7 +112,8 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
                 : ! android_auto_unavailable_in_profiles.isEmpty() ? this::showExtensionInIsland : null);
 
 		final Preference preference_agent = findPreference(getString(R.string.pref_agent));
-		final int agent_version = getPackageVersion(WeChatDecorator.AGENT_PACKAGE);
+		int agent_version = getPackageVersion(WeChatDecorator.AGENT_PACKAGE);
+		if (agent_version < 0) agent_version = getPackageVersion(AGENT_LEGACY_PACKAGE);
 		preference_agent.setEnabled(wechat_installed);
 		if (agent_version >= CURRENT_AGENT_VERSION) {
 			final Intent launcher_intent = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(WeChatDecorator.AGENT_PACKAGE);
@@ -120,7 +123,17 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 			preference_agent.setOnPreferenceClickListener(pref -> selectAgentLabel());
 		} else {
 			preference_agent.setSummary(agent_version < 0 ? R.string.pref_agent_summary : R.string.pref_agent_summary_update);
-			preference_agent.setOnPreferenceClickListener(pref -> installAssetApk("agent.apk"));
+			preference_agent.setOnPreferenceClickListener(pref -> {
+				try { pm.getApplicationInfo(AGENT_LEGACY_PACKAGE, 0); }
+				catch (final NameNotFoundException ignored) {
+					installAssetApk("agent.apk");
+					return true;
+				}
+				new AlertDialog.Builder(this).setMessage(R.string.prompt_uninstall_agent_first).setPositiveButton(R.string.action_continue, (d, w) ->
+						startActivity(new Intent(ACTION_UNINSTALL_PACKAGE, Uri.fromParts("package", AGENT_LEGACY_PACKAGE, null))
+								.putExtra("android.intent.extra.UNINSTALL_ALL_USERS", true))).show();
+				return true;
+			});
 		}
 	}
 
@@ -190,12 +203,11 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		installAssetApk("dummy-auto.apk");
 	}
 
-	private boolean installAssetApk(final String asset_name) {
+	private void installAssetApk(final String asset_name) {
 		try {
 			final String authority = getPackageManager().getProviderInfo(new ComponentName(this, AssetFileProvider.class), 0).authority;
 			startActivity(new Intent(Intent.ACTION_INSTALL_PACKAGE, Uri.parse("content://" + authority + "/" + asset_name)).addFlags(FLAG_GRANT_READ_URI_PERMISSION));
 		} catch (final NameNotFoundException | ActivityNotFoundException ignored) {}	// Should never happen
-		return true;
 	}
 
 	private int getPackageVersion(final String pkg) {
