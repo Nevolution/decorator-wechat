@@ -30,7 +30,6 @@ import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat.MessagingStyle;
 import androidx.core.app.NotificationCompat.MessagingStyle.Message;
 import androidx.core.app.Person;
-import androidx.core.util.Consumer;
 
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation;
 import com.oasisfeng.nevo.sdk.MutableNotification;
@@ -80,8 +79,6 @@ class MessagingBuilder {
 	private static final String KEY_DATA_MIME_TYPE = "type";
 	private static final String KEY_DATA_URI= "uri";
 	private static final String KEY_EXTRAS_BUNDLE = "extras";
-
-	private static final String KEY_USERNAME = "key_username";
 
 	@Nullable MessagingStyle buildFromArchive(final Conversation conversation, final Notification n, final CharSequence title, final List<StatusBarNotification> archive) {
 		// Chat history in big content view
@@ -135,8 +132,7 @@ class MessagingBuilder {
 		return messaging;
 	}
 
-	@Nullable MessagingStyle buildFromConversation(final Conversation conversation,
-			final MutableStatusBarNotification sbn, final Consumer<String> conversation_key_receiver) {
+	@Nullable MessagingStyle buildFromConversation(final Conversation conversation, final MutableStatusBarNotification sbn) {
 		final CarExtender.UnreadConversation ext = conversation.ext;
 		if (ext == null) return null;
 		final MutableNotification n = sbn.getNotification();
@@ -144,14 +140,6 @@ class MessagingBuilder {
 		if (latest_timestamp > 0) n.when = conversation.timestamp = latest_timestamp;
 
 		final PendingIntent on_reply = ext.getReplyPendingIntent();
-		if (conversation.key == null && on_reply != null) try {
-			final PendingIntent.OnFinished callback = (p, intent, r, d, b) ->
-					conversation_key_receiver.accept(intent.getStringExtra(KEY_USERNAME));
-			on_reply.send(mContext, 0, new Intent(""/* noop */), callback, null);
-		} catch (final PendingIntent.CanceledException e) {
-			Log.e(TAG, "Error parsing reply intent.", e);
-		}
-
 		final PendingIntent on_read = ext.getReadPendingIntent();
 		if (on_read != null) mMarkReadPendingIntents.put(sbn.getKey(), on_read);	// Mapped by evolved key,
 

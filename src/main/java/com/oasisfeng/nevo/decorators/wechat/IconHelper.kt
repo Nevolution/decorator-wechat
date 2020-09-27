@@ -1,26 +1,24 @@
 package com.oasisfeng.nevo.decorators.wechat
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.ShortcutManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Icon
-import android.os.Build
+import android.os.Build.VERSION.SDK_INT
 import android.os.Build.VERSION_CODES.O
 import androidx.annotation.RequiresApi
+import androidx.core.content.getSystemService
 import androidx.core.graphics.drawable.IconCompat
 
-object IconHelper {
+@RequiresApi(O) object IconHelper {
 
-	@JvmStatic fun convertToAdaptiveIcon(context: Context, sm: ShortcutManager, source: IconCompat): Icon
-			= if (Build.VERSION.SDK_INT < O) @Suppress("DEPRECATION") source.toIcon()
-			else @SuppressLint("SwitchIntDef") when (source.type) {
-				Icon.TYPE_ADAPTIVE_BITMAP, Icon.TYPE_RESOURCE -> @Suppress("DEPRECATION") source.toIcon()
-				else -> Icon.createWithAdaptiveBitmap(drawableToBitmap(context, sm, source)) }
+	@JvmStatic fun convertToAdaptiveIcon(context: Context, source: IconCompat): Icon
+			= if (source.type == Icon.TYPE_RESOURCE) source.toIcon(null)
+			else source.toLocalAdaptiveIcon(context, context.getSystemService()!!)
 
-	@RequiresApi(O) private fun drawableToBitmap(context: Context, sm: ShortcutManager, icon: IconCompat): Bitmap {
+	fun drawableToBitmap(context: Context, sm: ShortcutManager, icon: IconCompat): Bitmap {
 		val extraInsetFraction = AdaptiveIconDrawable.getExtraInsetFraction()
 		val width = sm.iconMaxWidth; val height = sm.iconMaxHeight
 		val xInset = (width * extraInsetFraction).toInt(); val yInset = (height * extraInsetFraction).toInt()
@@ -30,3 +28,8 @@ object IconHelper {
 				draw(Canvas(bitmap)) }}
 	}
 }
+
+fun IconCompat.toLocalAdaptiveIcon(context: Context, sm: ShortcutManager): Icon
+		= @Suppress("CascadeIf") if (SDK_INT < O) toIcon(null)
+		else if (type == Icon.TYPE_ADAPTIVE_BITMAP) toIcon(null)
+		else Icon.createWithAdaptiveBitmap(IconHelper.drawableToBitmap(context, sm, this))

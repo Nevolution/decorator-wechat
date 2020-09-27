@@ -17,9 +17,12 @@
 package com.oasisfeng.nevo.decorators.wechat;
 
 import android.app.Notification;
+import android.app.Notification.Action;
 import android.app.Notification.BubbleMetadata;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.RemoteInput;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -28,7 +31,6 @@ import android.content.LocusId;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
-import android.content.pm.ShortcutManager;
 import android.graphics.drawable.Icon;
 import android.media.AudioAttributes;
 import android.net.Uri;
@@ -37,7 +39,10 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Parcel;
+import android.os.ParcelFileDescriptor;
+import android.os.Parcelable;
 import android.os.Process;
+import android.os.SharedMemory;
 import android.os.UserHandle;
 import android.provider.Settings;
 import android.util.Log;
@@ -60,6 +65,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static android.app.Notification.EXTRA_REMOTE_INPUT_HISTORY;
 import static android.app.Notification.EXTRA_SUB_TEXT;
@@ -87,6 +94,10 @@ import static com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversat
  */
 public class WeChatDecorator extends NevoDecoratorService {
 
+	/** Not fully working yet. Bubble will be shown, but WeChat activity LauncherUI cannot be launched into the floating window. */
+	static final boolean BUBBLE_ON_Q = false;
+	private static final boolean IGNORE_CAR_EXTENDER = false;    // For test purpose
+
 	static final String WECHAT_PACKAGE = "com.tencent.mm";
 	static final String AGENT_PACKAGE = "com.oasisfeng.nevo.agents.v1.wechat";
 	static final String CHANNEL_MESSAGE = "message_channel_new_id";				// Channel ID used by WeChat for all message notifications
@@ -103,7 +114,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private static final String GROUP_DIRECT = "nevo.group.wechat";
 	private static final String GROUP_MISC = "misc";    // Not auto-grouped
 	@SuppressWarnings("SpellCheckingInspection")
-	static final String KEY_SERVICE_MESSAGE = "notifymessage";					// Virtual WeChat account for service notification messages
+	private static final String KEY_SERVICE_MESSAGE = "notifymessage";			// Virtual WeChat account for service notification messages
+	private static final String EXTRA_USERNAME = "Main_User";                   // Extra in content intent
 
 	private static final @ColorInt int PRIMARY_COLOR = 0xFF33B332;
 	private static final @ColorInt int LIGHT_COLOR = 0xFF00FF00;
@@ -160,50 +172,56 @@ public class WeChatDecorator extends NevoDecoratorService {
 			conversation = mConversationManager.getOrCreateConversation(profile, title_hash);
 		} else conversation = mConversationManager.getOrCreateConversation(profile, evolving.getOriginalId());
 
-		final Icon icon = n.getLargeIcon();
-		conversation.icon = icon != null ? IconCompat.createFromIcon(this, icon) : null;
+		final Icon large_icon = n.getLargeIcon();
+		conversation.icon = IconCompat.createFromIcon(this, large_icon != null ? large_icon : n.getSmallIcon());
 		conversation.title = title;
 		conversation.summary = content_text;
 		conversation.ticker = n.tickerText;
 		conversation.timestamp = n.when;
-		conversation.ext = new Notification.CarExtender(n).getUnreadConversation();
+		conversation.ext = IGNORE_CAR_EXTENDER ? null : new Notification.CarExtender(n).getUnreadConversation();
 
 		if (conversation.isTypeUnknown())
 			conversation.setType(WeChatMessage.guessConversationType(conversation));    // mMessagingBuilder replies on the type
 
 		final String original_key = evolving.getOriginalKey();
-		MessagingStyle messaging = mMessagingBuilder.buildFromConversation(conversation, evolving, (@Nullable String key) -> {
-			if (key == null) { Log.e(TAG, "Unexpected null key received for conversation: " + conversation.title); return; }
-
-			final String previous_key = conversation.key;
-			conversation.key = key;    // setType() below will trigger rebuilding of conversation sender.
-			if (key == null) return;
-			final int type = key.endsWith("@chatroom") || key.endsWith("@im.chatroom"/* WeWork */) ? TYPE_GROUP_CHAT
-					: key.startsWith("gh_") || key.equals(KEY_SERVICE_MESSAGE) ? TYPE_BOT_MESSAGE
-					: key.endsWith("@openim") ? TYPE_DIRECT_MESSAGE : TYPE_UNKNOWN;
-			final int previous_type = conversation.setType(type);
-			if (previous_key == null || previous_type != type) {
-				recastNotification(original_key, RECAST_SILENT);    // Recast to update (group, shortcut, etc.)
-				if (BuildConfig.DEBUG && previous_type != type) MessagingBuilder.showDebugNotification(this,
-						conversation, "Type " + type + " << " + previous_type);
-			}
-		});
+		MessagingStyle messaging = mMessagingBuilder.buildFromConversation(conversation, evolving);
 		if (messaging == null)	// EXTRA_TEXT will be written in buildFromArchive()
 			messaging = mMessagingBuilder.buildFromArchive(conversation, n, title, getArchivedNotifications(original_key, MAX_NUM_ARCHIVED));
 		if (messaging == null) return true;
 		final List<MessagingStyle.Message> messages = messaging.getMessages();
 		if (messages.isEmpty()) return true;
 
-		if (SDK_INT >= Build.VERSION_CODES.R && input_history != null) {
-			for (int i = input_history.length - 1; i >= 0; i--) {
-				final CharSequence input = input_history[i];
-				messages.add(new MessagingStyle.Message(input, 0L, (Person) null));
-			}
+		if (conversation.key == null && mActivityBlocker != null) try {
+			final CountDownLatch latch = new CountDownLatch(1);
+			n.contentIntent.send(this, 0, new Intent().putExtra("", mActivityBlocker), (pi, intent, r, d, e) -> {
+				final String key = intent.getStringExtra(EXTRA_USERNAME);
+				if (key == null) { Log.e(TAG, "Unexpected null key received for conversation: " + conversation.title); return; }
+				conversation.key = key;    // setType() below will trigger rebuilding of conversation sender.
+				latch.countDown();
+			}, null);
+			try {
+				if (latch.await(100, TimeUnit.MILLISECONDS)) {
+					if (BuildConfig.DEBUG) Log.d(TAG, "Key retrieved: " + conversation.key);
+				} else Log.w(TAG, "Timeout retrieving conversation key");
+			} catch (final InterruptedException ignored) {}
+		} catch (final PendingIntent.CanceledException ignored) {}
+
+		final String key = conversation.key;
+		if (key != null) {
+			final int type = key.endsWith("@chatroom") || key.endsWith("@im.chatroom"/* WeWork */) ? TYPE_GROUP_CHAT
+					: key.startsWith("gh_") || key.equals(KEY_SERVICE_MESSAGE) ? TYPE_BOT_MESSAGE
+					: key.endsWith("@openim") ? TYPE_DIRECT_MESSAGE : TYPE_UNKNOWN;
+			conversation.setType(type);
+		}
+
+		if (SDK_INT >= Build.VERSION_CODES.R && input_history != null) {    // EXTRA_REMOTE_INPUT_HISTORY is not longer supported on Android R.
+			for (int i = input_history.length - 1; i >= 0; i--)             // Append them to messages in MessagingStyle.
+				messages.add(new MessagingStyle.Message(input_history[i], 0L, (Person) null));
 			extras.remove(EXTRA_REMOTE_INPUT_HISTORY);
 		}
 
 		final boolean is_group_chat = conversation.isGroupChat();
-		if (SDK_INT >= P && KEY_SERVICE_MESSAGE.equals(conversation.key)) {     // Setting conversation title before Android P will make it a group chat.
+		if (SDK_INT >= P && KEY_SERVICE_MESSAGE.equals(key)) {  // Setting conversation title before Android P will make it a group chat.
 			messaging.setConversationTitle(getString(R.string.header_service_message)); // A special header for this non-group conversation with multiple senders
 			n.setGroup(GROUP_BOT);
 		} else n.setGroup(is_group_chat ? GROUP_GROUP : conversation.isBotMessage() ? GROUP_BOT : GROUP_DIRECT);
@@ -217,25 +235,48 @@ public class WeChatDecorator extends NevoDecoratorService {
 		MessagingBuilder.flatIntoExtras(messaging, extras);
 		extras.putString(Notification.EXTRA_TEMPLATE, TEMPLATE_MESSAGING);
 
-		if (SDK_INT >= O && conversation.key != null) {
-			final String locusId = AgentShortcuts.Companion.buildShortcutId(conversation.key);
-			n.setShortcutId(locusId);
+		if (SDK_INT >= N_MR1 && key != null) {
+			final String shortcut_id = AgentShortcuts.Companion.buildShortcutId(key);
+			final boolean shortcut_ready = mAgentShortcuts.updateShortcutIfNeeded(shortcut_id, conversation, profile);
+			if (SDK_INT >= O && shortcut_ready) n.setShortcutId(shortcut_id);
 			if (SDK_INT >= Q) {
-				n.setLocusId(new LocusId(locusId));
-				setBubbleMetadata(n, conversation, locusId);
+				n.setLocusId(new LocusId(shortcut_id));
+				if (SDK_INT == Q && BUBBLE_ON_Q) {
+					setBubbleMetadata(n, conversation, shortcut_ready ? shortcut_id : null);    // Bubble could also work without shortcut on Android 10.
+					if (! hasValidRemoteInput(n.actions)) { // RemoteInput is required to show bubble on Android 10.
+						final Action.Builder action = new Action.Builder(null, "Reply", null)
+								.addRemoteInput(new RemoteInput.Builder("").setAllowFreeFormInput(false).build());
+						if (n.actions == null) n.actions = new Action[]{ action.build() };
+					}
+				} else if (SDK_INT > Q && shortcut_ready)
+					setBubbleMetadata(n, conversation, conversation.ext != null ? shortcut_id : null);
 			}
 		}
-
-		if (SDK_INT >= N_MR1) mAgentShortcuts.updateShortcutIfNeeded(conversation, profile);
 		return true;
 	}
 
 	@RequiresApi(Q) @SuppressWarnings("deprecation")
-	private void setBubbleMetadata(final MutableNotification n, final Conversation conversation, final String locusId) {
-		final BubbleMetadata.Builder builder = SDK_INT > Q ? new BubbleMetadata.Builder(locusId)
-				: new BubbleMetadata.Builder().setIntent(n.contentIntent)
-				.setIcon(IconHelper.convertToAdaptiveIcon(this, getSystemService(ShortcutManager.class), conversation.icon));
-		n.setBubbleMetadata(builder.setDesiredHeight(320).build());
+	private void setBubbleMetadata(final MutableNotification n, final Conversation conversation, final String shortcut_id) {
+		final BubbleMetadata.Builder builder = SDK_INT > Q && shortcut_id != null ? new BubbleMetadata.Builder(shortcut_id) // WeChat does not met the requirement of bubble on Android Q: "documentLaunchMode=always"
+				: new BubbleMetadata.Builder().setIcon(IconHelper.convertToAdaptiveIcon(this, conversation.icon))
+				.setIntent(SDK_INT > Q ? n.contentIntent : buildBubblePendingIntent(n.contentIntent, shortcut_id));
+		n.setBubbleMetadata(builder.setDesiredHeight(512).build());
+	}
+
+	private PendingIntent buildBubblePendingIntent(final PendingIntent target, final String locusId) {
+		return PendingIntent.getActivity(this, 0, new Intent()
+				.setData(Uri.fromParts("locus", locusId, null))
+				.setClassName(AGENT_PACKAGE, "com.oasisfeng.nevo.agents.AgentBubbleActivity")
+				.putExtra("target", target), PendingIntent.FLAG_UPDATE_CURRENT) ;
+	}
+
+	private static boolean hasValidRemoteInput(final @Nullable Action[] actions) {
+		if (actions == null) return false;
+		for (final Action action : actions) {
+			final RemoteInput[] inputs = action.getRemoteInputs();
+			if (inputs != null && inputs.length > 0) return true;
+		}
+		return false;
 	}
 
 	private boolean isDistinctId(final Notification n, final String pkg) {
@@ -362,6 +403,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	@Override public void onDestroy() {
 		unregisterReceiver(mSettingsChangedReceiver);
 		unregisterReceiver(mPackageEventReceiver);
+		if (SDK_INT >= N_MR1) mAgentShortcuts.close();
 		mMessagingBuilder.close();
 	}
 
@@ -377,6 +419,14 @@ public class WeChatDecorator extends NevoDecoratorService {
 		} finally {
 			parcel.recycle();
 		}
+	}
+
+	private static @Nullable Parcelable buildParcelableWithFileDescriptor() {
+		try {
+			if (SDK_INT >= Q) return SharedMemory.create(null, 1);
+			return ParcelFileDescriptor.createPipe()[0];
+		} catch (final Exception e) { Log.e(TAG, "Partially incompatible ROM: " + e.getMessage()); }
+		return null;
 	}
 
 	private final BroadcastReceiver mPackageEventReceiver = new BroadcastReceiver() { @Override public void onReceive(final Context context, final Intent intent) {
@@ -400,6 +450,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 	private SharedPreferences mPreferences;
 	private String mPrefKeyWear;
 	private final Handler mHandler = new Handler(Looper.myLooper());
+	private final @Nullable Parcelable mActivityBlocker = buildParcelableWithFileDescriptor();
 
 	static final String TAG = "Nevo.Decorator[WeChat]";
 }
