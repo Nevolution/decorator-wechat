@@ -44,6 +44,8 @@
     <string name="prompt_extension_install">你有两个选项：安装完整版的 Android Auto（消耗较多空间），或者“极简包”。如果你不需要使用 Android Auto 或者不清楚它是什么，建议选择“极简包”。</string>
     <string name="action_install_android_auto">安装 Android Auto</string>
     <string name="action_install_dummy_auto">安装极简包</string>
+    <string name="pref_compat_mode_title">兼容模式 (试验性)</string>
+    <string name="pref_compat_mode_summary">强制设备全局进入兼容模式，其影响与具体设备有关。（例如 “息屏显示” 或 “双击唤醒” 无法工作）\n最新版本微信需要这个模式才能启用特性扩展包。</string>
     <string name="pref_agent_title">体验增强包</string>
     <string name="pref_agent_summary">通过安装一个微信的替身，可消除女娲石在外源模式下的微信通知前缀，支持通知圆点（需启动器支持），并提供“扫码”的快捷方式。</string>
     <string name="pref_agent_summary_prefix_enabled">已启用</string>

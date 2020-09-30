@@ -22,6 +22,8 @@ import android.os.UserManager;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceManager;
+import android.preference.TwoStatePreference;
+import android.provider.Settings;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
@@ -111,6 +113,16 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		preference_extension.setOnPreferenceClickListener(! android_auto_available ? this::installExtension
                 : ! android_auto_unavailable_in_profiles.isEmpty() ? this::showExtensionInIsland : null);
 
+		final TwoStatePreference preference_compat_mode = (TwoStatePreference) findPreference(getString(R.string.pref_compat_mode));
+		if (android_auto_available && Settings.Global.getInt(getContentResolver(), Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) != 0) {
+			CompatModeController.query(this, preference_compat_mode::setChecked);
+			preference_compat_mode.setOnPreferenceChangeListener((preference, newValue) -> {
+				final boolean enabled = (Boolean) newValue;
+				CompatModeController.request(this, enabled, changed -> { if (changed) preference_compat_mode.setChecked(enabled); });
+				return false;   // Will be updated by the callback in previous line.
+			});
+		} else getPreferenceScreen().removePreference(preference_compat_mode);
+
 		final Preference preference_agent = findPreference(getString(R.string.pref_agent));
 		int agent_version = getPackageVersion(WeChatDecorator.AGENT_PACKAGE);
 		if (agent_version < 0) agent_version = getPackageVersion(AGENT_LEGACY_PACKAGE);
@@ -160,23 +172,12 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		return true;
 	}
 
-	private boolean toggleHidingLauncherIcon(@SuppressWarnings("unused") final Preference unused, final Object value) {
-		final boolean start_from_launcher = getIntent().getAction() != null;
-		if (start_from_launcher && value == Boolean.TRUE) {
-			new AlertDialog.Builder(this).setMessage(R.string.prompt_hide_prerequisite).setPositiveButton(android.R.string.cancel, null).show();
-			return false;
-		}
-		getPackageManager().setComponentEnabledSetting(new ComponentName(this, getClass()),
-				value != Boolean.TRUE ? COMPONENT_ENABLED_STATE_ENABLED : COMPONENT_ENABLED_STATE_DISABLED, DONT_KILL_APP);
-		return true;
-	}
-
 	private boolean isDecoratorRunning() {
 		final Intent service = new Intent(this, WeChatDecorator.class).setAction(NevoDecoratorService.ACTION_DECORATOR_SERVICE);
 		return mDummyReceiver.peekService(this, service) != null;
 	}
 
-	private boolean installExtension(@SuppressWarnings("unused") final Preference unused) {
+	private boolean installExtension(final Preference unused) {
 		if (isPlayStoreSystemApp()) {
 			new AlertDialog.Builder(this).setMessage(R.string.prompt_extension_install)
 					.setPositiveButton(R.string.action_install_android_auto, (d, c) -> showAndroidAutoInPlayStore())
@@ -185,7 +186,7 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		return true;
 	}
 
-	@SuppressLint("InlinedApi") private boolean showExtensionInIsland(@SuppressWarnings("unused") final Preference unused) {
+	@SuppressLint("InlinedApi") private boolean showExtensionInIsland(final Preference unused) {
 	    try {
             startActivity(new Intent(Intent.ACTION_SHOW_APP_INFO).putExtra(Intent.EXTRA_PACKAGE_NAME, ANDROID_AUTO_PACKAGE).setPackage(ISLAND_PACKAGE));
         } catch (final Exception ignored) {}
@@ -230,14 +231,14 @@ public class WeChatDecoratorSettingsActivity extends PreferenceActivity {
 		super.onDestroy();
 	}
 
-	private boolean installNevolution(final @SuppressWarnings("unused") Preference preference) {
+	private boolean installNevolution(final Preference preference) {
 		try {
 			startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(APP_MARKET_PREFIX + NEVOLUTION_PACKAGE)));
 		} catch (final ActivityNotFoundException ignored) {}	// TODO: Landing web page
 		return true;
 	}
 
-	private boolean activate(final @SuppressWarnings("unused") Preference preference) {
+	private boolean activate(final Preference preference) {
 		try {
 			startActivityForResult(new Intent("com.oasisfeng.nevo.action.ACTIVATE_DECORATOR").setPackage(NEVOLUTION_PACKAGE)
 					.putExtra("nevo.decorator", new ComponentName(this, WeChatDecorator.class))
