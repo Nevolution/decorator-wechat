@@ -64,7 +64,6 @@ class MessagingBuilder {
 	private static final int MAX_NUM_HISTORICAL_LINES = 10;
 
 	private static final String ACTION_REPLY = "REPLY";
-	private static final String ACTION_MENTION = "MENTION";
 	private static final String SCHEME_KEY = "key";
 	private static final String EXTRA_REPLY_ACTION = "pending_intent";
 	private static final String EXTRA_RESULT_KEY = "result_key";
@@ -129,6 +128,8 @@ class MessagingBuilder {
 			final Pair<CharSequence/* Text */, CharSequence/* Ticker */> line = lines.valueAt(i);
 			messaging.addMessage(buildMessage(conversation, lines.keyAt(i), line.second, line.first, sender_inline ? null : title.toString()));
 		}
+
+		Log.i(TAG, "Built from archive.");
 		return messaging;
 	}
 
@@ -352,7 +353,7 @@ class MessagingBuilder {
 		mController = controller;
 		mUserSelf = buildPersonFromProfile(context);
 
-		final IntentFilter filter = new IntentFilter(ACTION_REPLY); filter.addAction(ACTION_MENTION); filter.addDataScheme(SCHEME_KEY);
+		final IntentFilter filter = new IntentFilter(ACTION_REPLY); filter.addDataScheme(SCHEME_KEY);
 		context.registerReceiver(mReplyReceiver, filter);
 	}
 

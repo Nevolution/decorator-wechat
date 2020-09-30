@@ -21,7 +21,6 @@
     <string name="decorator_wechat_description">符合当代 Android 的最佳通知体验：会话样式、直接回复、划除即已读等高级特性。</string>
     <string name="self_display_name">你</string>
     <string name="action_reply">回复</string>
-    <string name="action_preview_image">预览图片</string>
     <string name="header_group_chat">群聊</string>
     <string name="header_bot_message">微信号</string>
     <string name="header_service_message">服务消息</string>
@@ -47,12 +46,12 @@
     <string name="pref_compat_mode_title">兼容模式 (试验性)</string>
     <string name="pref_compat_mode_summary">强制设备全局进入兼容模式，其影响与具体设备有关。（例如 “息屏显示” 或 “双击唤醒” 无法工作）\n最新版本微信需要这个模式才能启用特性扩展包。</string>
     <string name="pref_agent_title">体验增强包</string>
-    <string name="pref_agent_summary">通过安装一个微信的替身，可消除女娲石在外源模式下的微信通知前缀，支持通知圆点（需启动器支持），并提供“扫码”的快捷方式。</string>
+    <string name="pref_agent_summary">通过安装一个微信的替身，支持快捷方式（“扫码”及最近的会话）、通知圆点（需启动器支持）、聊天气泡（Android 11+）等特性，还可消除女娲石工作在外源模式时微信通知前缀。</string>
     <string name="pref_agent_summary_prefix_enabled">已启用</string>
     <string name="pref_agent_summary_prefix_disabled">已禁用</string>
     <string name="pref_agent_summary_installed">启用此功能后，启动器中会多出一个与微信相同图标的启动入口，它是一个微信启动图标的“替身”，通知圆点（需启动器支持）和“扫码”快捷方式（Android 7.1+）将显示在其上。\n点击可切换此替身的显示名或禁用。</string>
     <string name="pref_agent_summary_update">有更新版本，请点击这里开始升级。🆕</string>
-    <string name="action_disable_agent_launcher_entrance">隐藏替身的启动入口</string>
+    <string name="action_disable_agent_launcher_entrance">隐藏替身的启动入口\n（将失去“快捷方式”和“消息气泡”）</string>
     <string name="pref_alert_dedup_title">解决双重提示问题</string>
     <string name="pref_alert_dedup_summary">消除双重提示音、震动及横幅快速闪替。</string>
     <string name="pref_alert_dedup_guide">如果遇到通知横幅的闪替问题，请关闭微信本身通知设置中“新消息通知”的横幅选项（或调降重要性）。\n\n如果遇到双重提示音或震动，请关闭微信本身通知设置中“新消息通知”的提示音或震动。\n\n请避免修改除“新消息通知”之外的其它通知类别。</string>

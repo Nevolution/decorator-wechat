@@ -180,9 +180,6 @@ public class WeChatDecorator extends NevoDecoratorService {
 		conversation.timestamp = n.when;
 		conversation.ext = IGNORE_CAR_EXTENDER ? null : new Notification.CarExtender(n).getUnreadConversation();
 
-		if (conversation.isTypeUnknown())
-			conversation.setType(WeChatMessage.guessConversationType(conversation));    // mMessagingBuilder replies on the type
-
 		final String original_key = evolving.getOriginalKey();
 		MessagingStyle messaging = mMessagingBuilder.buildFromConversation(conversation, evolving);
 		if (messaging == null)	// EXTRA_TEXT will be written in buildFromArchive()
@@ -212,7 +209,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 					: key.startsWith("gh_") || key.equals(KEY_SERVICE_MESSAGE) ? TYPE_BOT_MESSAGE
 					: key.endsWith("@openim") ? TYPE_DIRECT_MESSAGE : TYPE_UNKNOWN;
 			conversation.setType(type);
-		}
+		} else if (conversation.isTypeUnknown())
+			conversation.setType(WeChatMessage.guessConversationType(conversation));
 
 		if (SDK_INT >= Build.VERSION_CODES.R && input_history != null) {    // EXTRA_REMOTE_INPUT_HISTORY is not longer supported on Android R.
 			for (int i = input_history.length - 1; i >= 0; i--)             // Append them to messages in MessagingStyle.
