@@ -149,11 +149,11 @@ class MessagingBuilder {
 		final RemoteInput remote_input;
 		if (SDK_INT >= N && on_reply != null && (remote_input = ext.getRemoteInput()) != null && conversation.isChat()) {
 			final CharSequence[] input_history = n.extras.getCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY);
-			final PendingIntent proxy = proxyDirectReply(conversation.id, sbn, on_reply, remote_input, input_history);
+			final PendingIntent proxy = proxyDirectReply(conversation.nid, sbn, on_reply, remote_input, input_history);
 			final RemoteInput.Builder reply_remote_input = new RemoteInput.Builder(remote_input.getResultKey()).addExtras(remote_input.getExtras())
 					.setAllowFreeFormInput(true).setChoices(SmartReply.generateChoices(messages));
 			final String participant = ext.getParticipant();	// No need to getParticipants() due to actually only one participant at most, see CarExtender.Builder().
-			if (BuildConfig.DEBUG && conversation.key != null) reply_remote_input.setLabel(conversation.key);
+			if (BuildConfig.DEBUG && conversation.id != null) reply_remote_input.setLabel(conversation.id);
 			else if (participant != null) reply_remote_input.setLabel(participant);
 
 			final Action.Builder reply_action = new Action.Builder(null, mContext.getString(R.string.action_reply), proxy)
@@ -172,11 +172,11 @@ class MessagingBuilder {
 		final String[] messages = convs.ext != null ? convs.ext.getMessages() : null;
 		if (messages != null) for (final String msg : messages) bigText.append("\n").append(msg);
 		final Builder n = new Builder(context).setSmallIcon(android.R.drawable.stat_sys_warning)
-				.setContentTitle(convs.key).setContentText(convs.ticker).setSubText(summary).setShowWhen(true)
+				.setContentTitle(convs.id).setContentText(convs.ticker).setSubText(summary).setShowWhen(true)
 				.setStyle(new BigTextStyle().setBigContentTitle(convs.title).bigText(bigText.toString()));
 		if (SDK_INT >= O) n.setChannelId("Debug");
 		requireNonNull(context.getSystemService(NotificationManager.class))
-				.notify(convs.key != null ? convs.key.hashCode() : convs.title.hashCode(), n.build());
+				.notify(convs.id != null ? convs.id.hashCode() : convs.title.hashCode(), n.build());
 	}
 
 	private static Message buildMessage(final Conversation conversation, final long when, final @Nullable CharSequence ticker,

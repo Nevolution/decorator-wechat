@@ -188,26 +188,27 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final List<MessagingStyle.Message> messages = messaging.getMessages();
 		if (messages.isEmpty()) return true;
 
-		if (conversation.key == null && mActivityBlocker != null) try {
+		if (conversation.id == null && mActivityBlocker != null) try {
 			final CountDownLatch latch = new CountDownLatch(1);
 			n.contentIntent.send(this, 0, new Intent().putExtra("", mActivityBlocker), (pi, intent, r, d, e) -> {
-				final String key = intent.getStringExtra(EXTRA_USERNAME);
-				if (key == null) { Log.e(TAG, "Unexpected null key received for conversation: " + conversation.title); return; }
-				conversation.key = key;    // setType() below will trigger rebuilding of conversation sender.
+				final String id = intent.getStringExtra(EXTRA_USERNAME);
+				if (id == null) { Log.e(TAG, "Unexpected null ID received for conversation: " + conversation.title); return; }
+				conversation.id = id;    // setType() below will trigger rebuilding of conversation sender.
 				latch.countDown();
+				if (BuildConfig.DEBUG && id.hashCode() != conversation.nid) Log.e(TAG, "NID is not hash code of CID");
 			}, null);
 			try {
 				if (latch.await(100, TimeUnit.MILLISECONDS)) {
-					if (BuildConfig.DEBUG) Log.d(TAG, "Key retrieved: " + conversation.key);
-				} else Log.w(TAG, "Timeout retrieving conversation key");
+					if (BuildConfig.DEBUG) Log.d(TAG, "Conversation ID retrieved: " + conversation.id);
+				} else Log.w(TAG, "Timeout retrieving conversation ID");
 			} catch (final InterruptedException ignored) {}
 		} catch (final PendingIntent.CanceledException ignored) {}
 
-		final String key = conversation.key;
-		if (key != null) {
-			final int type = key.endsWith("@chatroom") || key.endsWith("@im.chatroom"/* WeWork */) ? TYPE_GROUP_CHAT
-					: key.startsWith("gh_") || key.equals(KEY_SERVICE_MESSAGE) ? TYPE_BOT_MESSAGE
-					: key.endsWith("@openim") ? TYPE_DIRECT_MESSAGE : TYPE_UNKNOWN;
+		final String cid = conversation.id;
+		if (cid != null) {
+			final int type = cid.endsWith("@chatroom") || cid.endsWith("@im.chatroom"/* WeWork */) ? TYPE_GROUP_CHAT
+					: cid.startsWith("gh_") || cid.equals(KEY_SERVICE_MESSAGE) ? TYPE_BOT_MESSAGE
+					: cid.endsWith("@openim") ? TYPE_DIRECT_MESSAGE : TYPE_UNKNOWN;
 			conversation.setType(type);
 		} else if (conversation.isTypeUnknown())
 			conversation.setType(WeChatMessage.guessConversationType(conversation));
@@ -219,7 +220,7 @@ public class WeChatDecorator extends NevoDecoratorService {
 		}
 
 		final boolean is_group_chat = conversation.isGroupChat();
-		if (SDK_INT >= P && KEY_SERVICE_MESSAGE.equals(key)) {  // Setting conversation title before Android P will make it a group chat.
+		if (SDK_INT >= P && KEY_SERVICE_MESSAGE.equals(cid)) {  // Setting conversation title before Android P will make it a group chat.
 			messaging.setConversationTitle(getString(R.string.header_service_message)); // A special header for this non-group conversation with multiple senders
 			n.setGroup(GROUP_BOT);
 		} else n.setGroup(is_group_chat ? GROUP_GROUP : conversation.isBotMessage() ? GROUP_BOT : GROUP_DIRECT);
@@ -233,8 +234,8 @@ public class WeChatDecorator extends NevoDecoratorService {
 		MessagingBuilder.flatIntoExtras(messaging, extras);
 		extras.putString(Notification.EXTRA_TEMPLATE, TEMPLATE_MESSAGING);
 
-		if (SDK_INT >= N_MR1 && key != null) {
-			final String shortcut_id = AgentShortcuts.Companion.buildShortcutId(key);
+		if (SDK_INT >= N_MR1 && cid != null) {
+			final String shortcut_id = AgentShortcuts.Companion.buildShortcutId(cid);
 			final boolean shortcut_ready = mAgentShortcuts.updateShortcutIfNeeded(shortcut_id, conversation, profile);
 			if (SDK_INT >= O && shortcut_ready) n.setShortcutId(shortcut_id);
 			if (SDK_INT >= Q) {
@@ -246,15 +247,15 @@ public class WeChatDecorator extends NevoDecoratorService {
 								.addRemoteInput(new RemoteInput.Builder("").setAllowFreeFormInput(false).build());
 						if (n.actions == null) n.actions = new Action[]{ action.build() };
 					}
-				} else if (SDK_INT > Q && shortcut_ready)
-					setBubbleMetadata(n, conversation, conversation.ext != null ? shortcut_id : null);
+				} else if (SDK_INT > Q && shortcut_ready)   // Shortcut does not use conversation ID if it is absent.
+					setBubbleMetadata(n, conversation, conversation.id != null ? shortcut_id : null);
 			}
 		}
 		return true;
 	}
 
 	@RequiresApi(Q) @SuppressWarnings("deprecation")
-	private void setBubbleMetadata(final MutableNotification n, final Conversation conversation, final String shortcut_id) {
+	private void setBubbleMetadata(final MutableNotification n, final Conversation conversation, final @Nullable String shortcut_id) {
 		final BubbleMetadata.Builder builder = SDK_INT > Q && shortcut_id != null ? new BubbleMetadata.Builder(shortcut_id) // WeChat does not met the requirement of bubble on Android Q: "documentLaunchMode=always"
 				: new BubbleMetadata.Builder().setIcon(IconHelper.convertToAdaptiveIcon(this, conversation.icon))
 				.setIntent(SDK_INT > Q ? n.contentIntent : buildBubblePendingIntent(n.contentIntent, shortcut_id));

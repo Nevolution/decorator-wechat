@@ -38,8 +38,8 @@ public class ConversationManager {
 
 		private static final String SCHEME_ORIGINAL_NAME = "ON:";
 
-		final int id;
-		volatile @Nullable String key;       // The user name in WeChat
+		final int nid;                  // The notification ID of conversation (hash code of "id" below)
+		volatile @Nullable String id;   // The unique ID of conversation in WeChat
 		int count;
 		CharSequence title;
 		CharSequence summary;
@@ -54,7 +54,7 @@ public class ConversationManager {
 			if (type == mType) return type;
 			final int previous_type = mType;
 			mType = type;
-			sender = type == TYPE_UNKNOWN || type == TYPE_GROUP_CHAT ? null : sender().setKey(key).setBot(type == TYPE_BOT_MESSAGE);	// Always set key as it may change
+			sender = type == TYPE_UNKNOWN || type == TYPE_GROUP_CHAT ? null : sender().setKey(id).setBot(type == TYPE_BOT_MESSAGE);	// Always set key as it may change
 			if (type != TYPE_GROUP_CHAT) mParticipants.clear();
 			return previous_type;
 		}
@@ -98,7 +98,7 @@ public class ConversationManager {
 			return uri != null && uri.startsWith(SCHEME_ORIGINAL_NAME) ? uri.substring(SCHEME_ORIGINAL_NAME.length()): person.getName();
 		}
 
-		Conversation(final int id) { this.id = id; }
+		Conversation(final int nid) { this.nid = nid; }
 
 		@ConversationType private int mType;
 		private final Map<String, Person> mParticipants = new ArrayMap<>();

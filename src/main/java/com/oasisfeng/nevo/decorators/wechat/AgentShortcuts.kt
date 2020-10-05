@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.content.pm.PackageManager.GET_ACTIVITIES
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
-import android.graphics.drawable.Icon
 import android.graphics.drawable.Icon.TYPE_RESOURCE
 import android.os.Build.VERSION.SDK_INT
 import android.os.Build.VERSION_CODES.N
@@ -21,7 +20,6 @@ import android.util.Log
 import android.util.LruCache
 import androidx.annotation.RequiresApi
 import androidx.core.content.getSystemService
-import androidx.core.graphics.drawable.IconCompat
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation
 import com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.AGENT_PACKAGE
 import com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.TAG
@@ -50,8 +48,8 @@ import java.lang.reflect.Method
 		if (count >= sm.maxShortcutCountPerActivity - sm.manifestShortcuts.size)
 			sm.removeDynamicShortcuts(listOf(shortcuts.removeAt(0).id.also { Log.i(TAG, "Evict excess shortcut: $it") }))
 
-		val intent = if (conversation.ext != null) Intent().setClassName(WECHAT_PACKAGE, "com.tencent.mm.ui.LauncherUI")
-				.putExtra("Main_User", conversation.key).putExtra(@Suppress("SpellCheckingInspection") "Intro_Is_Muti_Talker", false)
+		val intent = if (conversation.id != null) Intent().setClassName(WECHAT_PACKAGE, "com.tencent.mm.ui.LauncherUI")
+				.putExtra("Main_User", conversation.id).putExtra(@Suppress("SpellCheckingInspection") "Intro_Is_Muti_Talker", false)
 				.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
 		else {
 			val bubbleActivity = (mAgentBubbleActivity
@@ -71,7 +69,7 @@ import java.lang.reflect.Method
 					if (SDK_INT >= Q) @SuppressLint("RestrictedApi") {
 						setLongLived(true).setLocusId(LocusId(id))
 						if (! conversation.isGroupChat) setPerson(conversation.sender().build().toAndroidPerson()) }}.build()
-		if (BuildConfig.DEBUG) { Log.i(TAG, "Updating shortcut \"${shortcut.id}\": ${shortcut.intent.toString()}") }
+		Log.i(TAG, "Updating shortcut \"${shortcut.id}\"${if (BuildConfig.DEBUG) ": " + shortcut.intent.toString() else ""}")
 		return if (sm.addDynamicShortcuts(listOf(shortcut))) true.also { Log.i(TAG, "Shortcut updated: $id") }
 		else false.also { Log.e(TAG, "Unexpected rate limit.") }
 	}
