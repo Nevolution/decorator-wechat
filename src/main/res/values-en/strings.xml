@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="action_continue">Continue</string>
+    <string name="pref_wear_title">Wear OS (experimental)</string>
+    <string name="self_display_name">You</string>
+    <string name="action_reply">Reply</string>
+    <string name="header_group_chat">Group Chat</string>
+    <string name="header_bot_message">WeChat Number</string>
+    <string name="header_service_message">Service Message</string>
+    <string name="wechat_with_no_reply_receiver">Reply failed (WeChat lacks the component to reply, it may be disabled)</string>
+    <string name="pref_activate_title">Activate</string>
+    <string name="pref_activate_summary_wechat_not_installed">\"WeChat\" is not installed</string>
+    <string name="pref_activate_summary_nevo_not_installed">Nevolution is not installed</string>
+    <string name="pref_activate_summary_already_activated">Enabled</string>
+    <string name="pref_extension_title">Feature Expansion Pack</string>
+    <string name="pref_extension_summary">Add more features (quick reply, mark as read, etc)</string>
+    <string name="pref_extension_summary_installed">Installed</string>
+    <string name="pref_extension_summary_not_cloned_in_island">Not cloned in Island</string>
+    <string name="prompt_extension_install">You have two options: Install the full version of Android Auto (which consumes more space), or the \"Dummy Package\". If you don\'t need to use Android Auto or not know what it is, it\'s recommended to choose the \"Dummy Package\".</string>
+    <string name="action_install_android_auto">Install Android Auto</string>
+    <string name="action_install_dummy_auto">Install Dummy Package</string>
+    <string name="pref_compat_mode_title">Compatibility mode (experimental)</string>
+    <string name="pref_compat_mode_summary">Force a device to globally enter compatibility mode, its impact is related to the specific device. (For example, \"Always On Display\" or \"Double Tap to Wake\" does not work)\nThe latest version of WeChat requires this mode in order to enable the Feature Expansion Pack.</string>
+    <string name="pref_agent_title">Experience Enhancement Package</string>
+    <string name="pref_agent_summary">By installing a WeChat stand-in, features such as shortcuts (\"scan mode\" and recent conversations), notification dots (requires launcher support), chat bubbles (Android 11+), and similar functions, as well as eliminating the WeChat notification prefix from Nevolution when operating in external mode will be supported.</string>
+    <string name="pref_agent_summary_prefix_enabled">Enabled</string>
+    <string name="pref_agent_summary_prefix_disabled">Disabled</string>
+    <string name="pref_agent_summary_installed">After this function is enabled, there will be an additional launch entry with the same icon as WeChat in the launcher, which is a \"stand-in\" for the WeChat launch icon, notification dots (requires launcher support) and \"scan code\" shortcuts (Android 7.1+), which will be displayed on it.\nClick to change the stand-in\'s display name or disable it.</string>
+    <string name="decorator_wechat_label">WeChat Notification Enhancer</string>
+    <string name="decorator_wechat_title">WeChat Notification Enhancer</string>
+    <string name="pref_agent_summary_update">There\'s a new update. Please click here to start the upgrade.</string>
+    <string name="action_disable_agent_launcher_entrance">Hide stand-in\'s start entry.\n("Shortcuts" and "Message Bubbles" will be lost)</string>
+    <string name="pref_alert_dedup_title">Solve double prompt problem</string>
+    <string name="pref_alert_dedup_summary">Eliminate double beeps, vibrations, and rapid pop-up flashing.</string>
+    <string name="pref_alert_dedup_guide">If you encounter a problem with the notification flashing, please turn off \"New Message Notification\" banner option in WeChat\'s notification settings (or reduce the importance).\n\nIf you encounter double beeps or vibrations, please turn off beeps or vibrations for \"New Message Notification\" in WeChat\'s notification settings.\n\nPlease avoid modifying notification categories other than \"New Message Notification\".</string>
+    <string name="pref_alert_dedup_action">Open WeChat\'s notification settings</string>
+    <string name="pref_wear_summary">Sync notifications to Wear OS devices. (If WeChat Wear is installed on your device, please do not open it)</string>
+    <string name="pref_open_source_title">Open source project</string>
+    <string name="pref_open_source_summary">You\'re welcome to visit us on GitHub</string>
+    <string name="prompt_uninstall_agent_first">Before installing the new version, you must first uninstall the currently installed WeChat stand-in. (Although it will prompt to uninstall \"WeChat\", it will in reality only uninstall the WeChat stand-in, and your WeChat application and data will not be affected in any way)</string>
+    <string name="decorator_wechat_description">Keep in line with Android\'s modern notification experiences: advanced features such as conversations, direct reply, and mark as read when swiping away the notification (and such high level features).</string>
+
+</resources>
