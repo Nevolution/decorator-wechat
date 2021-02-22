@@ -108,7 +108,7 @@ class EmojiMap {
 			{ "蜡烛",		"Candle",		"🕯️" },
 //			{ "勾引",		"Beckon",		""},
 //			{ "嘿哈",		"Hey",			"" },
-//			{ "机智",		"Smart",		"" },
+			{ "机智",		"Smart",		"👉" },
 //			{ "抠鼻",		"DigNose",		"" },
 //			{ null,		"NosePick",		"" }, // same as above for newer wechat
 			{ "可怜",		"Whimper",		"🥺" },
