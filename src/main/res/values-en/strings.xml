@@ -38,6 +38,6 @@
     <string name="pref_open_source_title">Open source project</string>
     <string name="pref_open_source_summary">You\'re welcome to visit us on GitHub</string>
     <string name="prompt_uninstall_agent_first">Before installing the new version, you must first uninstall the currently installed WeChat stand-in. (Although it will prompt to uninstall \"WeChat\", it will in reality only uninstall the WeChat stand-in, and your WeChat application and data will not be affected in any way)</string>
-    <string name="decorator_wechat_description">Keep in line with Android\'s modern notification experiences: advanced features such as conversations, direct reply, and mark as read when swiping away the notification (and such high level features).</string>
+    <string name="decorator_wechat_description">Support Android\'s modern notifications: advanced features such as conversations, direct reply, bubbles, and mark as read when swiping away the notification.</string>
 
 </resources>
