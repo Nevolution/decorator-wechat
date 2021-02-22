@@ -31,6 +31,7 @@ import android.content.LocusId;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.res.Resources;
 import android.graphics.drawable.Icon;
 import android.media.AudioAttributes;
 import android.net.Uri;
@@ -45,6 +46,7 @@ import android.os.Process;
 import android.os.SharedMemory;
 import android.os.UserHandle;
 import android.provider.Settings;
+import android.util.DisplayMetrics;
 import android.util.Log;
 
 import androidx.annotation.ColorInt;
@@ -259,7 +261,11 @@ public class WeChatDecorator extends NevoDecoratorService {
 		final BubbleMetadata.Builder builder = SDK_INT > Q && shortcut_id != null ? new BubbleMetadata.Builder(shortcut_id) // WeChat does not met the requirement of bubble on Android Q: "documentLaunchMode=always"
 				: new BubbleMetadata.Builder().setIcon(IconHelper.convertToAdaptiveIcon(this, conversation.icon))
 				.setIntent(SDK_INT > Q ? n.contentIntent : buildBubblePendingIntent(n.contentIntent, shortcut_id));
-		n.setBubbleMetadata(builder.setDesiredHeight(512).build());
+		Resources resources = getApplicationContext().getResources();
+		DisplayMetrics displayMetrics = resources.getDisplayMetrics();
+		float dpHeight = displayMetrics.heightPixels / displayMetrics.density;
+		
+		n.setBubbleMetadata(builder.setDesiredHeight((int) dpHeight).build());
 	}
 
 	private PendingIntent buildBubblePendingIntent(final PendingIntent target, final String locusId) {
