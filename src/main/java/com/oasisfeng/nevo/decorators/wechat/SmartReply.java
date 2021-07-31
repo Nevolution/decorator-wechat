@@ -12,7 +12,7 @@ import androidx.core.app.NotificationCompat.MessagingStyle.Message;
  */
 class SmartReply {
 
-	private static final CharSequence[][] REPLIES_FOR_QUESTION = {{ "👌", "好", "对", "没问题" }, { "👌", "OK", "Ye" }};
+	private static final CharSequence[][] REPLIES_FOR_QUESTION = {{ "👌", "好", "对", "没问题" }, { "👌", "Ok", "Yeah", "No problem" }};
 
 	static @Nullable CharSequence[] generateChoices(final Message[] messages) {
 		if (messages.length == 0) return null;
