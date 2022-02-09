@@ -21,14 +21,13 @@ import android.util.LruCache
 import androidx.annotation.RequiresApi
 import androidx.core.content.getSystemService
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation
-import com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.AGENT_PACKAGE
-import com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.TAG
-import com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.WECHAT_PACKAGE
+import com.oasisfeng.nevo.decorators.wechat.IconHelper.toLocalAdaptiveIcon
 import java.lang.reflect.Method
 
 @RequiresApi(N_MR1) class AgentShortcuts(private val context: Context) {
 
 	companion object {
+		private const val FLAG_ALLOW_EMBEDDED = -0x80000000
 		fun buildShortcutId(key: String) = "C:$key"
 	}
 
@@ -62,13 +61,15 @@ import java.lang.reflect.Method
 		}
 
 		val shortcut = ShortcutInfo.Builder(agentContext, id).setActivity(ComponentName(AGENT_PACKAGE, activity))
-				.setShortLabel(conversation.title).setRank(if (conversation.isGroupChat) 1 else 0)  // Always keep last direct message conversation on top.
+				.setShortLabel(conversation.title!!).setRank(if (conversation.isGroupChat()) 1 else 0)  // Always keep last direct message conversation on top.
 				.setIntent(intent.apply { if (action == null) action = Intent.ACTION_MAIN })
 				.setCategories(setOf(ShortcutInfo.SHORTCUT_CATEGORY_CONVERSATION)).apply {
-					if (conversation.icon != null) setIcon(conversation.icon.toLocalAdaptiveIcon(context, sm))
-					if (SDK_INT >= Q) @SuppressLint("RestrictedApi") {
+					conversation.icon?.run { setIcon(toLocalAdaptiveIcon(context, sm)) }
+					if (SDK_INT >= Q) {
 						setLongLived(true).setLocusId(LocusId(id))
-						if (! conversation.isGroupChat) setPerson(conversation.sender().build().toAndroidPerson()) }}.build()
+						if (! conversation.isGroupChat()) setPerson(conversation.sender().build().toNative())
+					}
+				}.build()
 		Log.i(TAG, "Updating shortcut \"${shortcut.id}\"${if (BuildConfig.DEBUG) ": " + shortcut.intent.toString() else ""}")
 		return if (sm.addDynamicShortcuts(listOf(shortcut))) true.also { Log.i(TAG, "Shortcut updated: $id") }
 		else false.also { Log.e(TAG, "Unexpected rate limit.") }
@@ -82,12 +83,12 @@ import java.lang.reflect.Method
 		catch (e: RuntimeException) { null.also { Log.e(TAG, "Error creating context for agent in user ${profile.hashCode()}", e) }}
 
 	/** @return whether shortcut is ready */
-	@RequiresApi(N_MR1) fun updateShortcutIfNeeded(id: String, conversation: Conversation, profile: UserHandle): Boolean {
-		if (! conversation.isChat || conversation.isBotMessage) return false
+	fun updateShortcutIfNeeded(id: String, conversation: Conversation, profile: UserHandle): Boolean {
+		if (! conversation.isChat() || conversation.isBotMessage()) return false
 		val agentContext = mAgentContextByProfile[profile] ?: return false
 		if (mDynamicShortcutContacts.get(id) != null) return true
 		try { if (updateShortcut(id, conversation, agentContext))
-			return true.also { if (conversation.icon.type != TYPE_RESOURCE) mDynamicShortcutContacts.put(id, Unit) }}   // If no large icon, wait for the next update
+			return true.also { if (conversation.icon?.type != TYPE_RESOURCE) mDynamicShortcutContacts.put(id, Unit) }}   // If no large icon, wait for the next update
 		catch (e: RuntimeException) { Log.e(TAG, "Error publishing shortcut: $id", e) }
 		return false
 	}
@@ -126,5 +127,3 @@ import java.lang.reflect.Method
 		mAgentContextByProfile.clear()
 	}
 }
-
-const val FLAG_ALLOW_EMBEDDED = -0x80000000

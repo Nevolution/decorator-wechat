@@ -13,21 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.oasisfeng.nevo.decorators.wechat
 
-package com.oasisfeng.nevo.decorators.wechat;
-
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-
-import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+import com.oasisfeng.nevo.decorators.wechat.WeChatDecoratorSettingsActivity
 
 /**
  * Created by Oasis on 2018/4/26.
  */
-public class WeChatDecoratorSettingsReceiver extends BroadcastReceiver {
+class WeChatDecoratorSettingsReceiver : BroadcastReceiver() {
 
-	@Override public void onReceive(final Context context, final Intent intent) {
-		context.startActivity(new Intent().setClassName(context, WeChatDecoratorSettingsActivity.class.getName()).addFlags(FLAG_ACTIVITY_NEW_TASK));
-	}
+    override fun onReceive(context: Context, intent: Intent) =
+        context.startActivity(Intent(context, WeChatDecoratorSettingsActivity::class.java).addFlags(FLAG_ACTIVITY_NEW_TASK))
 }
