@@ -22,13 +22,10 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Icon
-import android.os.Build.VERSION.SDK_INT
-import android.os.Build.VERSION_CODES.O
-import androidx.annotation.RequiresApi
 import androidx.core.content.getSystemService
 import androidx.core.graphics.drawable.IconCompat
 
-@RequiresApi(O) object IconHelper {
+object IconHelper {
 
 	fun convertToAdaptiveIcon(context: Context, source: IconCompat): Icon =
 		if (source.type == Icon.TYPE_RESOURCE) source.toIcon(null)
@@ -46,9 +43,7 @@ import androidx.core.graphics.drawable.IconCompat
 		}
 	}
 
-	fun IconCompat.toLocalAdaptiveIcon(context: Context, sm: ShortcutManager): Icon = when {
-		SDK_INT < O 						-> toIcon(null)
-		type == Icon.TYPE_ADAPTIVE_BITMAP 	-> toIcon(null)
-		else 								-> Icon.createWithAdaptiveBitmap(drawableToBitmap(context, sm, this))
-	}
+	fun IconCompat.toLocalAdaptiveIcon(context: Context, sm: ShortcutManager): Icon =
+		if (type == IconCompat.TYPE_ADAPTIVE_BITMAP) toIcon(null)
+		else Icon.createWithAdaptiveBitmap(drawableToBitmap(context, sm, this))
 }

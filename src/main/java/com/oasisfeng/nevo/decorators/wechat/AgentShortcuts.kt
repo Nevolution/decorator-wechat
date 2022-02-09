@@ -16,8 +16,10 @@
 
 package com.oasisfeng.nevo.decorators.wechat
 
-import android.annotation.SuppressLint
-import android.content.*
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.LocusId
 import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.GET_ACTIVITIES
@@ -25,8 +27,6 @@ import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
 import android.graphics.drawable.Icon.TYPE_RESOURCE
 import android.os.Build.VERSION.SDK_INT
-import android.os.Build.VERSION_CODES.N
-import android.os.Build.VERSION_CODES.N_MR1
 import android.os.Build.VERSION_CODES.Q
 import android.os.Process
 import android.os.UserHandle
@@ -34,13 +34,12 @@ import android.os.UserManager
 import android.util.ArrayMap
 import android.util.Log
 import android.util.LruCache
-import androidx.annotation.RequiresApi
 import androidx.core.content.getSystemService
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation
 import com.oasisfeng.nevo.decorators.wechat.IconHelper.toLocalAdaptiveIcon
 import java.lang.reflect.Method
 
-@RequiresApi(N_MR1) class AgentShortcuts(private val context: Context) {
+class AgentShortcuts(private val context: Context) {
 
 	companion object {
 		private const val FLAG_ALLOW_EMBEDDED = -0x80000000
@@ -49,7 +48,7 @@ import java.lang.reflect.Method
 
 	/** @return true if shortcut is ready */
 	private fun updateShortcut(id: String, conversation: Conversation, agentContext: Context): Boolean {
-		if (SDK_INT >= N && agentContext.getSystemService(UserManager::class.java)?.isUserUnlocked == false) return false // Shortcuts cannot be changed if user is locked.
+		if (agentContext.getSystemService(UserManager::class.java)?.isUserUnlocked == false) return false // Shortcuts cannot be changed if user is locked.
 
 		val activity = agentContext.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN)   // Use agent context to resolve in proper user.
 				.addCategory(Intent.CATEGORY_LAUNCHER).setPackage(AGENT_PACKAGE), 0)?.activityInfo?.name
@@ -71,9 +70,9 @@ import java.lang.reflect.Method
 					?: try { context.packageManager.getPackageInfo(AGENT_PACKAGE, GET_ACTIVITIES).activities
 					.firstOrNull { it.enabled && it.flags.and(FLAG_ALLOW_EMBEDDED) != 0 }?.name ?: "" }
 					catch (e: PackageManager.NameNotFoundException) { "" }.also { mAgentBubbleActivity = it })   // "" to indicate N/A
-			if (bubbleActivity.isNotEmpty()) {
+			if (SDK_INT >= Q && bubbleActivity.isNotEmpty())
 				Intent(Intent.ACTION_VIEW_LOCUS).putExtra(Intent.EXTRA_LOCUS_ID, id).setClassName(AGENT_PACKAGE, bubbleActivity)
-			} else Intent().setClassName(AGENT_PACKAGE, activity)
+			else Intent().setClassName(AGENT_PACKAGE, activity)
 		}
 
 		val shortcut = ShortcutInfo.Builder(agentContext, id).setActivity(ComponentName(AGENT_PACKAGE, activity))
@@ -91,12 +90,12 @@ import java.lang.reflect.Method
 		else false.also { Log.e(TAG, "Unexpected rate limit.") }
 	}
 
-	private fun createAgentContext(profile: UserHandle): Context?
-		= try {
+	private fun createAgentContext(profile: UserHandle): Context? =
+		try {
 			if (profile == Process.myUserHandle()) context.createPackageContext(AGENT_PACKAGE, 0)
-			else mMethodCreatePackageContextAsUser?.invoke(context, AGENT_PACKAGE, 0, profile) as? Context }
-		catch (e: PackageManager.NameNotFoundException) { null }
-		catch (e: RuntimeException) { null.also { Log.e(TAG, "Error creating context for agent in user ${profile.hashCode()}", e) }}
+			else mMethodCreatePackageContextAsUser?.invoke(context, AGENT_PACKAGE, 0, profile) as? Context
+		} catch (e: PackageManager.NameNotFoundException) { null
+		} catch (e: RuntimeException) { null.also { Log.e(TAG, "Error creating context for agent in user ${profile.hashCode()}", e) }}
 
 	/** @return whether shortcut is ready */
 	fun updateShortcutIfNeeded(id: String, conversation: Conversation, profile: UserHandle): Boolean {

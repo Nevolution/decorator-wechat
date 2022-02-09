@@ -26,15 +26,15 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.LauncherApps
 import android.content.pm.PackageManager.*
 import android.net.Uri
-import android.os.*
-import android.os.Build.VERSION.SDK_INT
-import android.os.Build.VERSION_CODES.N
+import android.os.Bundle
+import android.os.Process
+import android.os.UserHandle
+import android.os.UserManager
 import android.preference.Preference
+import android.preference.Preference.OnPreferenceClickListener
 import android.preference.PreferenceActivity
-import android.preference.TwoStatePreference
 import android.provider.Settings
 import android.util.Log
-import androidx.annotation.RequiresApi
 import androidx.annotation.StringRes
 import com.oasisfeng.nevo.decorators.wechat.WeChatDecorator.Companion.ACTION_SETTINGS_CHANGED
 import com.oasisfeng.nevo.sdk.NevoDecoratorService
@@ -42,13 +42,13 @@ import com.oasisfeng.nevo.sdk.NevoDecoratorService
 /**
  * Entry activity. Some ROMs (including Samsung, OnePlus) require a launcher activity to allow any component being bound by other app.
  */
-@SuppressLint("ExportedPreferenceActivity")
 class WeChatDecoratorSettingsActivity : PreferenceActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val manager = preferenceManager
         manager.sharedPreferencesName = WeChatDecorator.PREFERENCES_NAME
-        if (SDK_INT >= N) manager.setStorageDeviceProtected()
+        manager.setStorageDeviceProtected()
         preferenceManager.sharedPreferences.registerOnSharedPreferenceChangeListener(mPreferencesChangeListener)
         addPreferencesFromResource(R.xml.decorators_wechat_settings)
     }
@@ -71,8 +71,8 @@ class WeChatDecoratorSettingsActivity : PreferenceActivity() {
                 else -> null
             }
             onPreferenceClickListener = when {
-                ! isNevoInstalled -> Preference.OnPreferenceClickListener { installNevolution() }
-                isWechatInstalled && ! running -> Preference.OnPreferenceClickListener { activate() }
+                ! isNevoInstalled -> OnPreferenceClickListener { installNevolution() }
+                isWechatInstalled && ! running -> OnPreferenceClickListener { activate() }
                 else -> null
             }
         }
@@ -81,14 +81,12 @@ class WeChatDecoratorSettingsActivity : PreferenceActivity() {
         findPreference(getString(R.string.pref_extension)).apply {
             val profilesWithoutAndroidAuto = ArrayList<Int>()
             val profiles = getSystemService(UserManager::class.java)?.userProfiles ?: emptyList()
-            if (SDK_INT >= N) {
-                val la = getSystemService(LauncherApps::class.java)
-                if (la != null) for (profile in profiles) {
-                    if (profile == Process.myUserHandle()) continue
-                    if (la.getApplicationInfo(WECHAT_PACKAGE, profile) == null) continue
-                    if (la.getApplicationInfo(ANDROID_AUTO_PACKAGE, profile) == null)
-                        profilesWithoutAndroidAuto.add(profile.hashCode())
-                }
+            val la = getSystemService(LauncherApps::class.java)
+            if (la != null) for (profile in profiles) {
+                if (profile == Process.myUserHandle()) continue
+                if (la.getApplicationInfo(WECHAT_PACKAGE, profile) == null) continue
+                if (la.getApplicationInfo(ANDROID_AUTO_PACKAGE, profile) == null)
+                    profilesWithoutAndroidAuto.add(profile.hashCode())
             }
             isEnabled = isWechatInstalled
             isSelectable = ! isAndroidAutoAvailable || profilesWithoutAndroidAuto.isNotEmpty()
@@ -98,13 +96,13 @@ class WeChatDecoratorSettingsActivity : PreferenceActivity() {
                 else -> getString(R.string.pref_extension_summary_not_cloned_in_island,
                     if (profiles.size <= 2 /* Just one Island space */) "" else profilesWithoutAndroidAuto.toString()) }
             onPreferenceClickListener = when {
-                ! isAndroidAutoAvailable -> Preference.OnPreferenceClickListener { installExtension() }
-                profilesWithoutAndroidAuto.isNotEmpty() -> Preference.OnPreferenceClickListener { showExtensionInIsland() }
+                ! isAndroidAutoAvailable -> OnPreferenceClickListener { installExtension() }
+                profilesWithoutAndroidAuto.isNotEmpty() -> OnPreferenceClickListener { showExtensionInIsland() }
                 else -> null }
         }
 
         val context = this
-        (findPreference(getString(R.string.pref_compat_mode)) as TwoStatePreference).apply {
+        (findPreference(getString(R.string.pref_compat_mode)) as android.preference.TwoStatePreference).apply {
             if (isAndroidAutoAvailable && Settings.Global.getInt(contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) != 0) {
                 CompatModeController.query(context) { checked: Boolean? -> isChecked = checked!! }
                 onPreferenceChangeListener = Preference.OnPreferenceChangeListener { _: Preference?, newValue: Any ->
@@ -128,10 +126,10 @@ class WeChatDecoratorSettingsActivity : PreferenceActivity() {
                     ${getString(prefix)}
                     ${getString(R.string.pref_agent_summary_installed)}
                     """.trimIndent()
-                onPreferenceClickListener = Preference.OnPreferenceClickListener { selectAgentLabel() }
+                onPreferenceClickListener = OnPreferenceClickListener { selectAgentLabel() }
             } else {
                 setSummary(if (agentVersion < 0) R.string.pref_agent_summary else R.string.pref_agent_summary_update)
-                onPreferenceClickListener = Preference.OnPreferenceClickListener {
+                onPreferenceClickListener = OnPreferenceClickListener {
                     try {
                         pm.getApplicationInfo(AGENT_LEGACY_PACKAGE, 0)
                     } catch (ignored: NameNotFoundException) {
@@ -174,8 +172,8 @@ class WeChatDecoratorSettingsActivity : PreferenceActivity() {
     private fun installExtension() = true.also {
         if (isPlayStoreSystemApp()) {
             AlertDialog.Builder(this).setMessage(R.string.prompt_extension_install)
-                .setPositiveButton(R.string.action_install_android_auto) { d: DialogInterface?, c: Int -> showAndroidAutoInPlayStore() }
-                .setNeutralButton(R.string.action_install_dummy_auto) { d: DialogInterface?, c: Int -> installDummyAuto() }
+                .setPositiveButton(R.string.action_install_android_auto) { _: DialogInterface, _: Int -> showAndroidAutoInPlayStore() }
+                .setNeutralButton(R.string.action_install_dummy_auto) { _: DialogInterface, _: Int -> installDummyAuto() }
                 .show()
         } else installDummyAuto()
     }
@@ -197,7 +195,7 @@ class WeChatDecoratorSettingsActivity : PreferenceActivity() {
     private fun installAssetApk(asset_name: String) {
         val authority = packageManager.getProviderInfo(ComponentName(this, AssetFileProvider::class.java), 0).authority
         val uri = Uri.parse("content://$authority/$asset_name")
-        try { startActivity(Intent(Intent.ACTION_INSTALL_PACKAGE, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
+        try { startActivity(Intent(ACTION_INSTALL_PACKAGE, uri).addFlags(FLAG_GRANT_READ_URI_PERMISSION)) }
         catch (e: ActivityNotFoundException) {}
     }
 
@@ -247,7 +245,7 @@ class WeChatDecoratorSettingsActivity : PreferenceActivity() {
         private const val APP_MARKET_PREFIX = "market://details?id="
         private const val AGENT_LEGACY_PACKAGE = "com.oasisfeng.nevo.agents.wechat"
 
-        @RequiresApi(N) @SuppressLint("NewApi") private fun LauncherApps.getApplicationInfo(pkg: String, profile: UserHandle) =
+        @SuppressLint("NewApi") private fun LauncherApps.getApplicationInfo(pkg: String, profile: UserHandle) =
             try { getApplicationInfo(pkg, 0, profile) } catch (e: NameNotFoundException) { null }
     }
 }

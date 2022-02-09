@@ -16,20 +16,16 @@
 
 package com.oasisfeng.nevo.decorators.wechat
 
-import android.app.*
 import android.app.Notification.*
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.*
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
-import android.content.pm.PackageManager.GET_UNINSTALLED_PACKAGES
 import android.media.AudioAttributes
 import android.net.Uri
 import android.os.*
 import android.os.Build.VERSION.SDK_INT
 import android.os.Build.VERSION_CODES
-import android.os.Build.VERSION_CODES.N
-import android.os.Build.VERSION_CODES.N_MR1
-import android.os.Build.VERSION_CODES.O
 import android.os.Build.VERSION_CODES.P
 import android.os.Build.VERSION_CODES.Q
 import android.provider.Settings
@@ -55,6 +51,7 @@ import java.util.concurrent.TimeUnit.MILLISECONDS
 
 const val WECHAT_PACKAGE = "com.tencent.mm"
 const val AGENT_PACKAGE = "com.oasisfeng.nevo.agents.v1.wechat"
+private const val DESIRED_BUBBLE_EXPANDED_HEIGHT = 512
 
 /**
  * Bring state-of-art notification experience to WeChat.
@@ -64,8 +61,6 @@ const val AGENT_PACKAGE = "com.oasisfeng.nevo.agents.v1.wechat"
 class WeChatDecorator : NevoDecoratorService() {
 
     companion object {
-        /** Not fully working yet. Bubble will be shown, but WeChat activity LauncherUI cannot be launched into the floating window.  */
-        const val BUBBLE_ON_Q = false
         private const val IGNORE_CAR_EXTENDER = false // For test purpose
         const val CHANNEL_MESSAGE = "message_channel_new_id"            // Channel ID used by WeChat for all message notifications
         private const val MAX_NUM_ARCHIVED = 20
@@ -88,10 +83,6 @@ class WeChatDecorator : NevoDecoratorService() {
         const val ACTION_SETTINGS_CHANGED = "SETTINGS_CHANGED"
         const val PREFERENCES_NAME = "decorators-wechat"
         private const val EXTRA_SILENT_RECAST = "silent_recast"
-        private val RECAST_SILENT = Bundle().apply { putBoolean(EXTRA_SILENT_RECAST, true) }
-
-        private fun hasValidRemoteInput(actions: Array<Action>?) =
-            actions?.any { ! it.remoteInputs.isNullOrEmpty() } ?: false
 
         private fun getUser(key: String): UserHandle {
             val posPipe = key.indexOf('|')
@@ -104,7 +95,7 @@ class WeChatDecorator : NevoDecoratorService() {
         private fun userHandleOf(user: Int): UserHandle {
             val currentUser = Process.myUserHandle()
             if (user == currentUser.hashCode()) return currentUser
-            if (SDK_INT >= N) UserHandle.getUserHandleForUid(user * 100000 + 1)
+            UserHandle.getUserHandleForUid(user * 100000 + 1)
             val parcel = Parcel.obtain()
             try { return UserHandle(parcel.apply { writeInt(user); setDataPosition(0) }) }
             finally { parcel.recycle() }
@@ -131,7 +122,7 @@ class WeChatDecorator : NevoDecoratorService() {
         if (title.isNullOrEmpty()) return false.also { Log.e(TAG, "Title is missing: $evolving") }
 
         val flags = n.flags
-        val channelId = if (SDK_INT >= O) n.channelId else null
+        val channelId = n.channelId
         if (flags and FLAG_ONGOING_EVENT != 0 && channelId == CHANNEL_VOIP)
             return false
 
@@ -139,31 +130,23 @@ class WeChatDecorator : NevoDecoratorService() {
         extras.putBoolean(EXTRA_SHOW_WHEN, true)
         if (isEnabled(mPrefKeyWear)) n.flags = n.flags and FLAG_LOCAL_ONLY.inv()   // Remove FLAG_LOCAL_ONLY
         if (n.tickerText == null /* Legacy misc. notifications */ || CHANNEL_MISC == channelId) {
-            if (SDK_INT >= O && channelId == null) n.channelId = CHANNEL_MISC
+            if (channelId == null) n.channelId = CHANNEL_MISC
             n.group = GROUP_MISC // Avoid being auto-grouped
-            if (SDK_INT >= O && evolving.id == NID_LOGIN_CONFIRMATION)
+            if (evolving.id == NID_LOGIN_CONFIRMATION)
                 n.timeoutAfter = (5 * 60000).toLong() // The actual timeout for login confirmation is a little shorter than 5 minutes.
             Log.d(TAG, "Skip further process for non-conversation notification: $title") // E.g. web login confirmation notification.
             return n.flags and FLAG_FOREGROUND_SERVICE == 0
         }
         val contentText = extras.getCharSequence(EXTRA_TEXT) ?: return true
 
-        val inputHistory = if (SDK_INT >= N) extras.getCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY) else null
+        val inputHistory = extras.getCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY)
         if (inputHistory != null || extras.getBoolean(EXTRA_SILENT_RECAST)) n.flags = n.flags or FLAG_ONLY_ALERT_ONCE
 
         // WeChat previously uses dynamic counter starting from 4097 as notification ID, which is reused after cancelled by WeChat itself,
         //   causing conversation duplicate or overwritten notifications.
-        val pkg = evolving.packageName
         val profile = evolving.user
-        val conversation: Conversation?
-        if (! isDistinctId(n, pkg)) {
-            val titleHash = title.hashCode() // Not using the hash code of original title, which might have already evolved.
-            evolving.id = titleHash
-            conversation = mConversationManager.getOrCreateConversation(profile, titleHash)
-        } else conversation = mConversationManager.getOrCreateConversation(profile, evolving.originalId)
-
-        val largeIcon = n.getLargeIcon()
-        conversation.icon = IconCompat.createFromIcon(this, largeIcon ?: n.smallIcon)
+        val conversation = mConversationManager.getOrCreateConversation(profile, evolving.originalId)
+        conversation.icon = IconCompat.createFromIcon(this, n.getLargeIcon() ?: n.smallIcon)
         conversation.title = title
         conversation.summary = contentText
         conversation.ticker = n.tickerText
@@ -213,77 +196,48 @@ class WeChatDecorator : NevoDecoratorService() {
             messaging.conversationTitle = getString(R.string.header_service_message) // A special header for this non-group conversation with multiple senders
             n.group = GROUP_BOT
         } else n.group = if (isGroupChat) GROUP_GROUP else if (conversation.isBotMessage()) GROUP_BOT else GROUP_DIRECT
-        if (SDK_INT >= O) {
-            if (isGroupChat && mUseExtraChannels && CHANNEL_DND != channelId) n.channelId = CHANNEL_GROUP_CONVERSATION
-            else if (channelId == null) n.channelId = CHANNEL_MESSAGE // WeChat versions targeting O+ have its own channel for message
-        }
+        if (isGroupChat && mUseExtraChannels && CHANNEL_DND != channelId) n.channelId = CHANNEL_GROUP_CONVERSATION
+        else if (channelId == null) n.channelId = CHANNEL_MESSAGE // WeChat versions targeting O+ have its own channel for message     }
         if (isGroupChat) messaging.setGroupConversation(true).conversationTitle = title
         MessagingBuilder.flatIntoExtras(messaging, extras)
         extras.putString(EXTRA_TEMPLATE, TEMPLATE_MESSAGING)
-        if (SDK_INT >= N_MR1 && cid != null) {
+        if (cid != null) {
             val shortcutId = buildShortcutId(cid)
-            val shortcutReady = mAgentShortcuts!!.updateShortcutIfNeeded(shortcutId, conversation, profile)
-            if (SDK_INT >= O && shortcutReady) n.shortcutId = shortcutId
+            val shortcutReady = mAgentShortcuts.updateShortcutIfNeeded(shortcutId, conversation, profile)
+            if (shortcutReady) n.shortcutId = shortcutId
             if (SDK_INT >= Q) {
                 n.locusId = LocusId(shortcutId)
-                if (SDK_INT == Q && BUBBLE_ON_Q) {
-                    setBubbleMetadata(n, conversation, if (shortcutReady) shortcutId else null) // Bubble could also work without shortcut on Android 10.
-                    if (!hasValidRemoteInput(n.actions)) { // RemoteInput is required to show bubble on Android 10.
-                        val action = Action.Builder(null, "Reply", null)
-                            .addRemoteInput(RemoteInput.Builder("").setAllowFreeFormInput(false).build())
-                        if (n.actions == null) n.actions = arrayOf(action.build()) }
-                } else if (SDK_INT > Q && shortcutReady) // Shortcut does not use conversation ID if it is absent.
-                    setBubbleMetadata(n, conversation, if (conversation.id != null) shortcutId else null) }}
+                if (SDK_INT > Q && shortcutReady) // Shortcut does not use conversation ID if it is absent.
+                    setBubbleMetadata(n, conversation, if (conversation.id != null) shortcutId else null)
+            }
+        }
         return true
     }
 
-    @RequiresApi(Q) private fun setBubbleMetadata(n: MutableNotification, conversation: Conversation?, shortcut_id: String?) {
-        val builder = if (SDK_INT > Q && shortcut_id != null)
-            BubbleMetadata.Builder(shortcut_id) // WeChat does not met the requirement of bubble on Android Q: "documentLaunchMode=always"
-        else BubbleMetadata.Builder().setIcon(convertToAdaptiveIcon(this, conversation!!.icon!!))
-            .setIntent(if (SDK_INT > Q) n.contentIntent else buildBubblePendingIntent(n.contentIntent, shortcut_id))
-        n.bubbleMetadata = builder.setDesiredHeight(512).build()
+    @RequiresApi(VERSION_CODES.R) private fun setBubbleMetadata(n: MutableNotification, conversation: Conversation, shortcut_id: String?) {
+        val builder = if (shortcut_id != null) BubbleMetadata.Builder(shortcut_id) // WeChat does not met the requirement of bubble on Android Q: "documentLaunchMode=always"
+                      else BubbleMetadata.Builder(n.contentIntent, convertToAdaptiveIcon(this, conversation.icon!!))
+        n.bubbleMetadata = builder.setDesiredHeight(DESIRED_BUBBLE_EXPANDED_HEIGHT).build()
     }
-
-    private fun buildBubblePendingIntent(target: PendingIntent, locusId: String?): PendingIntent =
-        Intent().setData(Uri.fromParts("locus", locusId, null)).putExtra("target", target)
-            .setClassName(AGENT_PACKAGE, "com.oasisfeng.nevo.agents.AgentBubbleActivity").let {
-                PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_UPDATE_CURRENT) }
-
-    private fun isDistinctId(n: Notification, pkg: String): Boolean {
-        if (mDistinctIdSupported != null) return mDistinctIdSupported!!
-        var version = 0
-        val appInfo: ApplicationInfo? = n.extras.getParcelable("android.appInfo")
-        if (appInfo != null) try {
-            if (pkg == appInfo.packageName) // This will be Nevolution for active evolved notifications.
-                version = ApplicationInfo::class.java.getField("versionCode")[appInfo] as Int
-        } catch (e: IllegalAccessException) {} catch (e: NoSuchFieldException) {} catch (e: ClassCastException) {} // Fall-through
-        if (version == 0) try { version = packageManager.getPackageInfo(pkg, 0).versionCode }
-        catch (e: PackageManager.NameNotFoundException) {}
-        return version != 0 && version >= 1340.also { mDistinctIdSupported = true } // Distinct ID is supported since WeChat 6.7.3.
-    }
-    private var mDistinctIdSupported: Boolean? = null
 
     private fun isEnabled(mPrefKeyCallTweak: String) = mPreferences.getBoolean(mPrefKeyCallTweak, false)
 
     override fun onNotificationRemoved(key: String, reason: Int): Boolean {
         if (reason == REASON_APP_CANCEL) {  // For ongoing notification, or if "Removal-Aware" of Nevolution is activated
             Log.d(TAG, "Cancel notification: $key")
-        } else if (SDK_INT >= O && reason == REASON_CHANNEL_BANNED && ! isChannelAvailable(getUser(key))) {
+        } else if (reason == REASON_CHANNEL_BANNED && ! isChannelAvailable(getUser(key))) {
             Log.w(TAG, "Channel lost, disable extra channels from now on.")
             mUseExtraChannels = false
             mHandler.post { recastNotification(key, null) }
-        } else if (SDK_INT < O || reason == NotificationListenerService.REASON_CANCEL)  // Exclude the removal request by us in above case. (Removal-Aware is only supported on Android 8+)
+        } else if (reason == NotificationListenerService.REASON_CANCEL)  // Exclude the removal request by us in above case. (Removal-Aware is only supported on Android 8+)
             mMessagingBuilder.markRead(key)
         return false
     }
 
-    @RequiresApi(O) private fun isChannelAvailable(user: UserHandle) =
+    private fun isChannelAvailable(user: UserHandle) =
         getNotificationChannel(WECHAT_PACKAGE, user, CHANNEL_GROUP_CONVERSATION) != null
 
     override fun onConnected() {
-        if (SDK_INT < O) return
-        mWeChatTargetingO = isWeChatTargeting26OrAbove()
         val channels = ArrayList<NotificationChannel>()
         channels.add(makeChannel(CHANNEL_GROUP_CONVERSATION, R.string.channel_group_message, false))
         // WeChat versions targeting O+ have its own channels for message and misc
@@ -292,24 +246,25 @@ class WeChatDecorator : NevoDecoratorService() {
         createNotificationChannels(WECHAT_PACKAGE, Process.myUserHandle(), channels)
     }
 
-    @RequiresApi(O) private fun migrate(old_id: String, new_id: String, @StringRes new_name: Int, silent: Boolean): NotificationChannel {
+    private fun migrate(old_id: String, new_id: String, @StringRes new_name: Int, silent: Boolean): NotificationChannel {
         val channelMessage = getNotificationChannel(WECHAT_PACKAGE, Process.myUserHandle(), old_id)
         deleteNotificationChannel(WECHAT_PACKAGE, Process.myUserHandle(), old_id)
         return channelMessage?.let { cloneChannel(it, new_id, new_name) } ?: makeChannel(new_id, new_name, silent)
     }
 
-    @RequiresApi(O) private fun makeChannel(channel_id: String, @StringRes name: Int, silent: Boolean): NotificationChannel {
+    private fun makeChannel(channel_id: String, @StringRes name: Int, silent: Boolean): NotificationChannel {
         val channel = NotificationChannel(channel_id, getString(name), NotificationManager.IMPORTANCE_HIGH /* Allow heads-up (by default) */)
-        if (silent) channel.setSound(null, null)
-        else channel.setSound(
-            getDefaultSound(), AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT).build())
+        if (! silent) {
+            val attributes = AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT).build()
+            channel.setSound(getDefaultSound(), attributes)
+        } else channel.setSound(null, null)
         channel.enableLights(true)
         channel.lightColor = LIGHT_COLOR
         return channel
     }
 
-    @RequiresApi(O) private fun cloneChannel(channel: NotificationChannel, id: String, new_name: Int) =
+    private fun cloneChannel(channel: NotificationChannel, id: String, new_name: Int) =
         NotificationChannel(id, getString(new_name), channel.importance).apply {
             group = channel.group
             description = channel.description
@@ -322,39 +277,26 @@ class WeChatDecorator : NevoDecoratorService() {
         }
 
     // Before targeting O, WeChat actually plays sound by itself (not via Notification).
-    private fun getDefaultSound(): Uri? =
-        if (mWeChatTargetingO) Settings.System.DEFAULT_NOTIFICATION_URI else null
-
-    private fun isWeChatTargeting26OrAbove(): Boolean =
-        try { packageManager.getApplicationInfo(WECHAT_PACKAGE, GET_UNINSTALLED_PACKAGES).targetSdkVersion >= O }
-        catch (e: PackageManager.NameNotFoundException) { false }
+    private fun getDefaultSound(): Uri? = Settings.System.DEFAULT_NOTIFICATION_URI
 
     override fun onCreate() {
-        val context = if (SDK_INT >= N) createDeviceProtectedStorageContext() else this
+        val context = createDeviceProtectedStorageContext()
         mPreferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_MULTI_PROCESS)
         mPrefKeyWear = getString(R.string.pref_wear)
         mMessagingBuilder = MessagingBuilder(this, object : MessagingBuilder.Controller {
             override fun recastNotification(key: String, addition: Bundle?) = this@WeChatDecorator.recastNotification(key, addition)
             override fun getConversation(user: UserHandle, id: Int) = mConversationManager.getConversation(user, id)
         }) // Must be called after loadPreferences().
-        mAgentShortcuts = if (SDK_INT >= N_MR1) AgentShortcuts(this) else null
+        mAgentShortcuts = AgentShortcuts(this)
         val filter = IntentFilter(Intent.ACTION_PACKAGE_REMOVED)
         filter.addDataScheme("package")
-        registerReceiver(mPackageEventReceiver, filter)
         registerReceiver(mSettingsChangedReceiver, IntentFilter(ACTION_SETTINGS_CHANGED))
     }
 
     override fun onDestroy() {
         unregisterReceiver(mSettingsChangedReceiver)
-        unregisterReceiver(mPackageEventReceiver)
-        if (SDK_INT >= N_MR1) mAgentShortcuts!!.close()
+        mAgentShortcuts.close()
         mMessagingBuilder.close()
-    }
-
-    private val mPackageEventReceiver: BroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            if (intent.data?.schemeSpecificPart == WECHAT_PACKAGE) mDistinctIdSupported = null
-        }
     }
 
     private val mSettingsChangedReceiver: BroadcastReceiver = object : BroadcastReceiver() {
@@ -369,8 +311,7 @@ class WeChatDecorator : NevoDecoratorService() {
     }
     private val mConversationManager = ConversationManager()
     private lateinit var mMessagingBuilder: MessagingBuilder
-    private var mAgentShortcuts: AgentShortcuts? = null
-    private var mWeChatTargetingO = false
+    private lateinit var mAgentShortcuts: AgentShortcuts
     private var mUseExtraChannels = true // Extra channels should not be used in Insider mode, as WeChat always removes channels not maintained by itself.
     private lateinit var mPreferences: SharedPreferences
     private lateinit var mPrefKeyWear: String
