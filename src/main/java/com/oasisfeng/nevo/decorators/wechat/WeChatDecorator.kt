@@ -110,48 +110,43 @@ class WeChatDecorator : NevoDecoratorService() {
 
     public override fun apply(evolving: MutableStatusBarNotification): Boolean {
         val n = evolving.notification
-        if (n.flags and FLAG_GROUP_SUMMARY != 0) {
+        val flags = n.flags
+        if (flags and FLAG_GROUP_SUMMARY != 0) {
             n.extras.putCharSequence(EXTRA_SUB_TEXT, getText(when(n.group) {
                 GROUP_GROUP -> R.string.header_group_chat
                 GROUP_BOT   -> R.string.header_bot_message
-                else -> return false }))
+                else        -> return false }))
             return true
         }
         val extras = n.extras
         val title = extras.getCharSequence(EXTRA_TITLE)
+        val channel = n.channelId
         if (title.isNullOrEmpty()) return false.also { Log.e(TAG, "Title is missing: $evolving") }
-
-        val flags = n.flags
-        val channelId = n.channelId
-        if (flags and FLAG_ONGOING_EVENT != 0 && channelId == CHANNEL_VOIP)
-            return false
+        if (flags and FLAG_ONGOING_EVENT != 0 && channel == CHANNEL_VOIP) return false
 
         n.color = PRIMARY_COLOR // Tint the small icon
         extras.putBoolean(EXTRA_SHOW_WHEN, true)
         if (isEnabled(mPrefKeyWear)) n.flags = n.flags and FLAG_LOCAL_ONLY.inv()   // Remove FLAG_LOCAL_ONLY
-        if (n.tickerText == null /* Legacy misc. notifications */ || CHANNEL_MISC == channelId) {
-            if (channelId == null) n.channelId = CHANNEL_MISC
+        if (n.tickerText == null /* Legacy misc. notifications */ || channel == CHANNEL_MISC) {
+            if (channel == null) n.channelId = CHANNEL_MISC
             n.group = GROUP_MISC // Avoid being auto-grouped
             if (evolving.id == NID_LOGIN_CONFIRMATION)
                 n.timeoutAfter = (5 * 60000).toLong() // The actual timeout for login confirmation is a little shorter than 5 minutes.
             Log.d(TAG, "Skip further process for non-conversation notification: $title") // E.g. web login confirmation notification.
-            return n.flags and FLAG_FOREGROUND_SERVICE == 0
+            return flags and FLAG_FOREGROUND_SERVICE == 0
         }
         val contentText = extras.getCharSequence(EXTRA_TEXT) ?: return true
 
         val inputHistory = extras.getCharSequenceArray(EXTRA_REMOTE_INPUT_HISTORY)
         if (inputHistory != null || extras.getBoolean(EXTRA_SILENT_RECAST)) n.flags = n.flags or FLAG_ONLY_ALERT_ONCE
 
-        // WeChat previously uses dynamic counter starting from 4097 as notification ID, which is reused after cancelled by WeChat itself,
-        //   causing conversation duplicate or overwritten notifications.
         val profile = evolving.user
-        val conversation = mConversationManager.getOrCreateConversation(profile, evolving.originalId)
-        conversation.icon = IconCompat.createFromIcon(this, n.getLargeIcon() ?: n.smallIcon)
-        conversation.title = title
-        conversation.summary = contentText
-        conversation.ticker = n.tickerText
-        conversation.timestamp = n.`when`
-        conversation.ext = if (IGNORE_CAR_EXTENDER) null else CarExtender(n).unreadConversation
+        val conversation = mConversationManager.getOrCreateConversation(profile, evolving.originalId).also {
+            it.icon = IconCompat.createFromIcon(this, n.getLargeIcon() ?: n.smallIcon)
+            it.title = title; it.summary = contentText; it.ticker = n.tickerText; it.timestamp = n.`when`
+            it.ext = if (IGNORE_CAR_EXTENDER) null else CarExtender(n).unreadConversation
+        }
+
         val originalKey = evolving.originalKey
         var messaging = mMessagingBuilder.buildFromConversation(conversation, evolving)
         if (messaging == null) // EXTRA_TEXT will be written in buildFromArchive()
@@ -173,20 +168,20 @@ class WeChatDecorator : NevoDecoratorService() {
                 if (latch.await(100, MILLISECONDS)) {
                     if (BuildConfig.DEBUG) Log.d(TAG, "Conversation ID retrieved: " + conversation.id)
                 } else Log.w(TAG, "Timeout retrieving conversation ID")
-            } catch (ignored: InterruptedException) {}
-        } catch (ignored: PendingIntent.CanceledException) {}
+            } catch (_: InterruptedException) {}
+        } catch (_: PendingIntent.CanceledException) {}
 
         val cid = conversation.id
-        if (cid != null) {
-            val type = when {
-                cid.endsWith("@chatroom") || cid.endsWith("@im.chatroom") -> Conversation.TYPE_GROUP_CHAT   // @im.chatroom is WeWork
-                cid.startsWith("gh_") || cid == KEY_SERVICE_MESSAGE       -> Conversation.TYPE_BOT_MESSAGE
-                cid.endsWith("@openim")                                   -> Conversation.TYPE_DIRECT_MESSAGE
-                else                                                      -> Conversation.TYPE_UNKNOWN }
-            conversation.setType(type)
-        } else if (conversation.isTypeUnknown())
-            conversation.setType(guessConversationType(conversation))
-        if (SDK_INT >= VERSION_CODES.R && inputHistory != null) {    // EXTRA_REMOTE_INPUT_HISTORY is not longer supported on Android R.
+        if (cid == null) {
+            if (conversation.isTypeUnknown())
+                conversation.setType(guessConversationType(conversation))
+        } else conversation.setType(when {
+            cid.endsWith("@chatroom") || cid.endsWith("@im.chatroom") -> Conversation.TYPE_GROUP_CHAT   // @im.chatroom is WeWork
+            cid.startsWith("gh_") || cid == KEY_SERVICE_MESSAGE -> Conversation.TYPE_BOT_MESSAGE
+            cid.endsWith("@openim") -> Conversation.TYPE_DIRECT_MESSAGE
+            else -> Conversation.TYPE_UNKNOWN
+        })
+        if (SDK_INT >= VERSION_CODES.R && inputHistory != null) { // EXTRA_REMOTE_INPUT_HISTORY is no longer supported on Android R.
             for (i in inputHistory.indices.reversed())  // Append them to messages in MessagingStyle.
                 messages.add(NotificationCompat.MessagingStyle.Message(inputHistory[i], 0L, null as Person?))
             extras.remove(EXTRA_REMOTE_INPUT_HISTORY)
@@ -196,26 +191,25 @@ class WeChatDecorator : NevoDecoratorService() {
             messaging.conversationTitle = getString(R.string.header_service_message) // A special header for this non-group conversation with multiple senders
             n.group = GROUP_BOT
         } else n.group = if (isGroupChat) GROUP_GROUP else if (conversation.isBotMessage()) GROUP_BOT else GROUP_DIRECT
-        if (isGroupChat && mUseExtraChannels && CHANNEL_DND != channelId) n.channelId = CHANNEL_GROUP_CONVERSATION
-        else if (channelId == null) n.channelId = CHANNEL_MESSAGE // WeChat versions targeting O+ have its own channel for message     }
+        if (isGroupChat && mUseExtraChannels && channel != CHANNEL_DND) n.channelId = CHANNEL_GROUP_CONVERSATION
+        else if (channel == null) n.channelId = CHANNEL_MESSAGE // WeChat versions targeting O+ have its own channel for message     }
         if (isGroupChat) messaging.setGroupConversation(true).conversationTitle = title
         MessagingBuilder.flatIntoExtras(messaging, extras)
         extras.putString(EXTRA_TEMPLATE, TEMPLATE_MESSAGING)
-        if (cid != null) {
-            val shortcutId = buildShortcutId(cid)
-            val shortcutReady = mAgentShortcuts.updateShortcutIfNeeded(shortcutId, conversation, profile)
-            if (shortcutReady) n.shortcutId = shortcutId
-            if (SDK_INT >= Q) {
-                n.locusId = LocusId(shortcutId)
-                if (SDK_INT > Q && shortcutReady) // Shortcut does not use conversation ID if it is absent.
-                    setBubbleMetadata(n, conversation, if (conversation.id != null) shortcutId else null)
-            }
-        }
+
+        if (SDK_INT > Q) maybeAddBubbleMetadata(n, conversation, profile)
         return true
     }
 
-    @RequiresApi(VERSION_CODES.R) private fun setBubbleMetadata(n: MutableNotification, conversation: Conversation, shortcut_id: String?) {
-        val builder = if (shortcut_id != null) BubbleMetadata.Builder(shortcut_id) // WeChat does not met the requirement of bubble on Android Q: "documentLaunchMode=always"
+    @RequiresApi(VERSION_CODES.R)
+    private fun maybeAddBubbleMetadata(n: MutableNotification, conversation: Conversation, profile: UserHandle) {
+        if (! conversation.isChat() || conversation.isBotMessage()) return
+        val cid = conversation.id ?: return
+        val shortcutId = buildShortcutId(cid)
+        val shortcutReady = mAgentShortcuts.updateShortcutIfNeeded(shortcutId, conversation, profile)
+        if (shortcutReady) n.shortcutId = shortcutId
+        n.locusId = LocusId(shortcutId)
+        val builder = if (shortcutReady) BubbleMetadata.Builder(shortcutId)
                       else BubbleMetadata.Builder(n.contentIntent, convertToAdaptiveIcon(this, conversation.icon!!))
         n.bubbleMetadata = builder.setDesiredHeight(DESIRED_BUBBLE_EXPANDED_HEIGHT).build()
     }
