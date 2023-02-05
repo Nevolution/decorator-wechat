@@ -64,7 +64,6 @@ class WeChatDecorator : NevoDecoratorService() {
         private const val IGNORE_CAR_EXTENDER = false // For test purpose
         const val CHANNEL_MESSAGE = "message_channel_new_id"            // Channel ID used by WeChat for all message notifications
         private const val MAX_NUM_ARCHIVED = 20
-        private const val NID_LOGIN_CONFIRMATION = 38                   // The static notification ID of WeChat login confirmation
         private const val OLD_CHANNEL_MESSAGE = "message"               //   old name for migration
         private const val CHANNEL_MISC = "reminder_channel_id"          // Channel ID used by WeChat for misc. notifications
         private const val OLD_CHANNEL_MISC = "misc"                     //   old name for migration
@@ -130,8 +129,6 @@ class WeChatDecorator : NevoDecoratorService() {
         if (n.tickerText == null /* Legacy misc. notifications */ || channel == CHANNEL_MISC) {
             if (channel == null) n.channelId = CHANNEL_MISC
             n.group = GROUP_MISC // Avoid being auto-grouped
-            if (evolving.id == NID_LOGIN_CONFIRMATION)
-                n.timeoutAfter = (5 * 60000).toLong() // The actual timeout for login confirmation is a little shorter than 5 minutes.
             Log.d(TAG, "Skip further process for non-conversation notification: $title") // E.g. web login confirmation notification.
             return flags and FLAG_FOREGROUND_SERVICE == 0
         }
