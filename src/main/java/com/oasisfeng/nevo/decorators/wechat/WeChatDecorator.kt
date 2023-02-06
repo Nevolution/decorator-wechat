@@ -86,7 +86,7 @@ class WeChatDecorator : NevoDecoratorService() {
         private fun getUser(key: String): UserHandle {
             val posPipe = key.indexOf('|')
             if (posPipe > 0)
-                try { return userHandleOf(key.substring(0, posPipe).toInt()) } catch (e: NumberFormatException) {}
+                try { return userHandleOf(key.substring(0, posPipe).toInt()) } catch (_: NumberFormatException) {}
             Log.e(TAG, "Invalid key: $key")
             return Process.myUserHandle() // Only correct for single user.
         }

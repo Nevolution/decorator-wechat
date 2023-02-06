@@ -44,10 +44,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation
 import com.oasisfeng.nevo.sdk.MutableStatusBarNotification
-import java.util.*
 
 /**
- * Build the modernized [MessagingStyle] for WeChat conversation.
+ * Build the modernized [MessagingStyle][NotificationCompat.MessagingStyle] for WeChat conversation.
  *
  * Refactored by Oasis on 2018-8-9.
  */
@@ -217,7 +216,7 @@ internal class MessagingBuilder(private val mContext: Context, private val mCont
     }
 
     fun close() {
-        try { mContext.unregisterReceiver(mReplyReceiver) } catch (e: RuntimeException) {}
+        try { mContext.unregisterReceiver(mReplyReceiver) } catch (_: RuntimeException) {}
     }
 
     init {
@@ -257,16 +256,14 @@ internal class MessagingBuilder(private val mContext: Context, private val mCont
         }
 
         private fun buildMessage(conversation: Conversation, `when`: Long, ticker: CharSequence?, text: CharSequence,
-                                 sender: String?): NotificationCompat.MessagingStyle.Message {
-            var sender = sender
+                                 senderArg: String?): NotificationCompat.MessagingStyle.Message {
+            var sender = senderArg
             var actualText: CharSequence? = text
             if (sender == null) {
                 sender = text.extractSenderFromText()
                 if (sender != null) {
-                    actualText =
-                        text.subSequence(sender.length + SENDER_MESSAGE_SEPARATOR.length, text.length)
-                    if (TextUtils.equals(conversation.title, sender)) sender =
-                        null // In this case, the actual sender is user itself.
+                    actualText = text.subSequence(sender.length + SENDER_MESSAGE_SEPARATOR.length, text.length)
+                    if (conversation.title == sender) sender = null // In this case, the actual sender is user itself.
                 }
             }
             actualText = EmojiTranslator.translate(actualText)
