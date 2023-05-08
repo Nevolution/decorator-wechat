@@ -7,11 +7,6 @@
         android:title="@string/pref_activate_title"
         tools:summary="@string/pref_activate_summary_already_activated" />
 
-    <Preference
-        android:key="@string/pref_extension"
-        android:title="@string/pref_extension_title"
-        tools:summary="@string/pref_extension_summary" />
-
     <SwitchPreference
         android:key="@string/pref_compat_mode"
         android:title="@string/pref_compat_mode_title"

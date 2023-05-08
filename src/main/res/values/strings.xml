@@ -36,13 +36,6 @@
     <string name="pref_activate_summary_wechat_not_installed">“微信”未安装</string>
     <string name="pref_activate_summary_nevo_not_installed">“女娲石”尚未安装</string>
     <string name="pref_activate_summary_already_activated">已启用</string>
-    <string name="pref_extension_title">特性扩展包</string>
-    <string name="pref_extension_summary">添加更多特性（快捷回复、划掉标记已读 等）</string>
-    <string name="pref_extension_summary_installed">已安装</string>
-    <string name="pref_extension_summary_not_cloned_in_island">壶中界%s 内未克隆</string>
-    <string name="prompt_extension_install">你有两个选项：安装完整版的 Android Auto（消耗较多空间），或者“极简包”。如果你不需要使用 Android Auto 或者不清楚它是什么，建议选择“极简包”。</string>
-    <string name="action_install_android_auto">安装 Android Auto</string>
-    <string name="action_install_dummy_auto">安装极简包</string>
     <string name="pref_compat_mode_title">兼容模式 (试验性)</string>
     <string name="pref_compat_mode_summary">强制设备全局进入兼容模式，其影响与具体设备有关。（例如 “息屏显示” 或 “双击唤醒” 无法工作）\n最新版本微信需要这个模式才能启用特性扩展包。</string>
     <string name="pref_agent_title">体验增强包</string>
@@ -60,6 +53,5 @@
     <string name="pref_wear_summary">同步通知至 Wear OS 设备。（如果设备上安装有微信 Wear 版，请勿开启）</string>
     <string name="pref_open_source_title">开源项目</string>
     <string name="pref_open_source_summary">欢迎来 GitHub 上访问我们</string>
-    <string name="prompt_uninstall_agent_first">安装新版本前，须先卸载当前安装的微信替身版本。（尽管将提示卸载“微信”，实际卸载的只是微信替身，您的微信应用及数据不会受到任何影响）</string>
     <string name="action_continue">继续</string>
 </resources>

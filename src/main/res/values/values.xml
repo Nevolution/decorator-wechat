@@ -10,7 +10,6 @@
     <integer name="repacked_asset_offset">0</integer>
 
     <string name="pref_activate" translatable="false">activate</string>
-    <string name="pref_extension" translatable="false">extension</string>
     <string name="pref_compat_mode" translatable="false">compat</string>
     <string name="pref_agent" translatable="false">agent</string>
     <string name="pref_wear" translatable="false">wear</string>
