@@ -16,6 +16,7 @@
 
 package com.oasisfeng.nevo.decorators.wechat
 
+import android.app.ActivityOptions
 import android.app.Notification.*
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -99,12 +100,6 @@ class WeChatDecorator : NevoDecoratorService() {
             try { return UserHandle(parcel.apply { writeInt(user); setDataPosition(0) }) }
             finally { parcel.recycle() }
         }
-
-        private fun buildParcelableWithFileDescriptor(): Parcelable? {
-            try { return if (SDK_INT >= Q) SharedMemory.create(null, 1) else ParcelFileDescriptor.createPipe()[0] }
-            catch (e: Exception) { Log.e(TAG, "Partially incompatible ROM: " + e.message) }
-            return null
-        }
     }
 
     public override fun apply(evolving: MutableStatusBarNotification): Boolean {
@@ -152,15 +147,15 @@ class WeChatDecorator : NevoDecoratorService() {
         if (messaging == null) return true
         val messages = messaging.messages
         if (messages.isEmpty()) return true
-        if (conversation.id == null && mActivityBlocker != null) try {
+        if (conversation.id == null) try {
             val latch = CountDownLatch(1)
-            n.contentIntent.send(this, 0, Intent().putExtra("", mActivityBlocker), { _: PendingIntent?, intent: Intent, _: Int, _: String?, _: Bundle? ->
+            n.contentIntent.send(this, 0, null, { _: PendingIntent?, intent: Intent, _: Int, _: String?, _: Bundle? ->
                 val id = intent.getStringExtra(EXTRA_USERNAME) ?: return@send Unit.also {
                     Log.e(TAG, "Unexpected null ID received for conversation: " + conversation.title) }
                 conversation.id = id // setType() below will trigger rebuilding of conversation sender.
                 latch.countDown()
                 if (BuildConfig.DEBUG && id.hashCode() != conversation.nid) Log.e(TAG, "NID is not hash code of CID")
-            }, null)
+            }, null, null, mActivityBlocker)
             try {
                 if (latch.await(100, MILLISECONDS)) {
                     if (BuildConfig.DEBUG) Log.d(TAG, "Conversation ID retrieved: " + conversation.id)
@@ -307,7 +302,7 @@ class WeChatDecorator : NevoDecoratorService() {
     private lateinit var mPreferences: SharedPreferences
     private lateinit var mPrefKeyWear: String
     private val mHandler = Handler(Looper.myLooper()!!)
-    private val mActivityBlocker = buildParcelableWithFileDescriptor()
+    private val mActivityBlocker = ActivityOptions.makeBasic().setLaunchDisplayId(Int.MAX_VALUE / 2).toBundle()
 }
 
 const val TAG = "Nevo.Decorator[WeChat]"
